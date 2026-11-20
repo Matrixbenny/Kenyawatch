@@ -46,9 +46,24 @@ async function mirror({ force = false } = {}) {
 
     let total = 0;
     for (const name of names) {
-      const docs = await src.collection(name).find().toArray();
       const out = dst.collection(name);
-      await out.deleteMany({});
+      let docs;
+      if (name.endsWith('.chunks')) {
+        // File chunks never change once written, so only new ones are downloaded
+        // and removed ones deleted; this keeps each run to a few kilobytes.
+        const atlasIds = await src.collection(name).distinct('_id');
+        const localIds = new Set((await out.distinct('_id')).map(String));
+        const atlasSet = new Set(atlasIds.map(String));
+        await out.deleteMany({ _id: { $in: (await out.distinct('_id')).filter((id) => !atlasSet.has(String(id))) } });
+        const missing = atlasIds.filter((id) => !localIds.has(String(id)));
+        docs = [];
+        for (let i = 0; i < missing.length; i += 50) {
+          docs.push(...await src.collection(name).find({ _id: { $in: missing.slice(i, i + 50) } }).toArray());
+        }
+      } else {
+        docs = await src.collection(name).find().toArray();
+        await out.deleteMany({});
+      }
       for (let i = 0; i < docs.length; i += 500) await out.insertMany(docs.slice(i, i + 500), { ordered: false });
       for (const index of await src.collection(name).indexes()) {
         if (index.name === '_id_') continue;
