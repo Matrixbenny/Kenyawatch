@@ -64,6 +64,21 @@ function validateModel(model) {
     }
   }
 
+  const concepts = model.preprocessing?.concepts;
+  if (concepts != null) {
+    const map = concepts.concepts;
+    if (typeof map !== 'object' || map === null || Object.keys(map).length === 0 ||
+      Object.entries(map).some(([name, phrases]) => !/^[a-z_]+$/.test(name) || !Array.isArray(phrases) ||
+        phrases.some((phrase) => typeof phrase !== 'string' || !/^[a-z0-9 ]+$/.test(phrase)))) {
+      throw new ModelArtifactError('The experimental category model has invalid concept preprocessing.');
+    }
+  }
+  const calibration = model.calibration;
+  if (calibration != null && (!Number.isFinite(calibration.temperature) || calibration.temperature <= 0 ||
+    !Number.isFinite(calibration.confidentAt) || calibration.confidentAt <= 0 || calibration.confidentAt >= 1)) {
+    throw new ModelArtifactError('The experimental category model has invalid calibration settings.');
+  }
+
   for (const [name, vectorizer] of Object.entries({ word, ...(char ? { char } : {}) })) {
     if (!Array.isArray(vectorizer.idf) || vectorizer.idf.some((value) => !Number.isFinite(value) || value <= 0) ||
       !vectorizer.vocabulary || typeof vectorizer.vocabulary !== 'object' ||
@@ -151,8 +166,13 @@ function vectorize(counts, vectorizer, offset) {
 // Relative per-category scores (softmax of the model's decision values). They
 // rank the categories against each other for one report; they are NOT calibrated
 // probabilities and say nothing about real-world accuracy.
+// When the artefact carries a calibration temperature (fitted on grouped
+// out-of-fold scores during training), these are calibrated probabilities on
+// the synthetic data; older artefacts give relative scores only. Either way
+// they are never shown to users as a confidence figure.
 function scoreCategories({ title, description }, model = loadModel()) {
-  const decisions = decisionValues({ title, description }, model);
+  const temperature = model.calibration?.temperature || 1;
+  const decisions = decisionValues({ title, description }, model).map((value) => value / temperature);
   const max = Math.max(...decisions);
   const exps = decisions.map((value) => Math.exp(value - max));
   const total = exps.reduce((sum, value) => sum + value, 0);
@@ -168,7 +188,7 @@ function decisionValues({ title, description }, model) {
   // artefacts without a preprocessing record keep the glossary-only behaviour.
   const raw = `${title} ${description}`;
   const fullText = model.preprocessing
-    ? prepareModelText(raw, model.preprocessing.morphology || null)
+    ? prepareModelText(raw, model.preprocessing.morphology || null, model.preprocessing.concepts || null)
     : normaliseForMatching(raw);
   const word = model.features.word;
   const char = model.features.char;
@@ -185,19 +205,23 @@ function decisionValues({ title, description }, model) {
   ));
 }
 
+// Returns the suggested category and, for calibrated artefacts, whether the
+// model is confident. When it is not, the second most likely category is
+// returned as well, so the reviewer sees "A or B" instead of a guess. No
+// numeric score is returned.
 function classifyText({ title, description }, model = loadModel()) {
-  const decisions = decisionValues({ title, description }, model);
-  let bestIndex = 0;
-  for (let index = 1; index < decisions.length; index += 1) {
-    if (decisions[index] > decisions[bestIndex]) bestIndex = index;
-  }
-
-  return {
-    suggestion: model.categories[bestIndex],
+  const ranked = scoreCategories({ title, description }, model);
+  const result = {
+    suggestion: ranked[0].category,
     modelVersion: model.modelVersion,
     trainingDataStatus: model.trainingDataStatus,
     warning: MODEL_WARNING
   };
+  if (model.calibration) {
+    result.confidence = ranked[0].score >= model.calibration.confidentAt ? 'high' : 'low';
+    if (result.confidence === 'low') result.alternative = ranked[1].category;
+  }
+  return result;
 }
 
 module.exports = { ModelArtifactError, classifyText, scoreCategories, hasIndependentCategoryAssessment, loadModel };

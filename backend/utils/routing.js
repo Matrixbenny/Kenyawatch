@@ -16,8 +16,9 @@ const { normaliseForMatching } = require('./kenyaLingo');
 // A single unambiguous or strong keyword in the narrative is enough to count a
 // category as "present"; one weak word is not.
 const NARRATIVE_MIN_SCORE = 3;
-// Relative model score above which a second category is worth mentioning. The
-// score ranks categories for one report and is not a calibrated probability.
+// Model score above which a second category is worth mentioning. With a
+// calibrated artefact this is a probability on the synthetic training data
+// (a real one-in-four chance of a second offence); it is never shown to users.
 const MODEL_MIN_SCORE = 0.25;
 
 const SOURCE_WEIGHT = { reporter: 1, reporterExtra: 0.8, narrative: 0.6, model: 0.5 };

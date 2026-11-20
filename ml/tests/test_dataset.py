@@ -180,6 +180,11 @@ class DatasetAuditTests(unittest.TestCase):
             # The artefact records how text was prepared, so the API prepares it the same way.
             self.assertEqual(runtime_model["preprocessing"]["normaliser"], "kenya-lingo")
             self.assertIn("subject", runtime_model["preprocessing"]["morphology"])
+            self.assertIn("bribe", runtime_model["preprocessing"]["concepts"]["concepts"])
+            # Confidence is calibrated on grouped out-of-fold scores and travels with the model.
+            self.assertGreater(runtime_model["calibration"]["temperature"], 0)
+            self.assertEqual(runtime_model["calibration"]["confidentAt"], 0.6)
+            self.assertIn("accuracy_when_confident", result["calibration"])
 
 
 if __name__ == "__main__":

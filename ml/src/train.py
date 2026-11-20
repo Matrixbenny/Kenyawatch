@@ -54,6 +54,16 @@ def street_language_enabled() -> bool:
     return os.environ.get("KW_MORPHOLOGY", "1") != "0"
 
 
+def concepts_enabled() -> bool:
+    """The concept layer (ml/lingo/concepts.json) is on unless KW_CONCEPTS=0."""
+    return os.environ.get("KW_CONCEPTS", "1") != "0"
+
+
+# Above this calibrated probability the suggestion is shown as a single
+# category; below it the reviewer sees the two most likely categories instead.
+CONFIDENT_AT = 0.6
+
+
 def _build_model(model_name: str, morphology: bool | None = None) -> Any:
     from sklearn.feature_extraction.text import TfidfVectorizer
     from sklearn.pipeline import FeatureUnion, Pipeline
@@ -64,7 +74,10 @@ def _build_model(model_name: str, morphology: bool | None = None) -> Any:
     # information from validation folds.
     prep = ("prep", FunctionTransformer(
         prepare_batch,
-        kw_args={"morphology": street_language_enabled() if morphology is None else morphology},
+        kw_args={
+            "morphology": street_language_enabled() if morphology is None else morphology,
+            "concepts": concepts_enabled(),
+        },
     ))
 
     word_features = TfidfVectorizer(
@@ -72,7 +85,7 @@ def _build_model(model_name: str, morphology: bool | None = None) -> Any:
         lowercase=True,
         strip_accents="unicode",
         ngram_range=(1, 2),
-        min_df=2,
+        min_df=1,
         max_features=50000,
         sublinear_tf=True,
     )
@@ -96,7 +109,7 @@ def _build_model(model_name: str, morphology: bool | None = None) -> Any:
             ("char", TfidfVectorizer(
                 analyzer="char_wb",
                 lowercase=True,
-                ngram_range=(3, 5),
+                ngram_range=(2, 6),
                 min_df=2,
                 max_features=50000,
                 sublinear_tf=True,
@@ -267,6 +280,60 @@ def evaluate(rows: list[dict[str, str]]) -> dict[str, Any]:
     return result
 
 
+def calibrate(rows: list[dict[str, str]], model_name: str) -> dict[str, Any]:
+    """Fit a softmax temperature on grouped out-of-fold decision values, so the
+    probabilities the API derives from the linear scores are calibrated, and
+    record how the confidence threshold behaves on those out-of-fold reports."""
+    import numpy as np
+    from scipy.optimize import minimize_scalar
+    from sklearn.model_selection import StratifiedGroupKFold
+
+    texts = [row["text"] for row in rows]
+    labels = np.array([row["label"] for row in rows])
+    groups = [row["group_id"] for row in rows]
+    decisions = np.zeros((len(rows), len(CATEGORIES)))
+    classes = None
+    for train_idx, test_idx in StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=42).split(texts, labels, groups):
+        model = _build_model(model_name).fit([texts[i] for i in train_idx], labels[train_idx])
+        classes = model.classes_
+        decisions[test_idx] = model.decision_function([texts[i] for i in test_idx])
+    truth = np.searchsorted(classes, labels)
+
+    def probabilities(temperature: float):
+        z = decisions / temperature
+        z = z - z.max(axis=1, keepdims=True)
+        e = np.exp(z)
+        return e / e.sum(axis=1, keepdims=True)
+
+    def nll(temperature: float) -> float:
+        return float(-np.mean(np.log(probabilities(temperature)[np.arange(len(truth)), truth] + 1e-12)))
+
+    def ece(p) -> float:
+        confidence, correct, total = p.max(axis=1), p.argmax(axis=1) == truth, 0.0
+        for low in np.linspace(0, 1, 10, endpoint=False):
+            in_bin = (confidence > low) & (confidence <= low + 0.1)
+            if in_bin.any():
+                total += in_bin.mean() * abs(correct[in_bin].mean() - confidence[in_bin].mean())
+        return float(total)
+
+    temperature = float(minimize_scalar(nll, bounds=(0.01, 5.0), method="bounded").x)
+    p = probabilities(temperature)
+    confident = p.max(axis=1) >= CONFIDENT_AT
+    correct = p.argmax(axis=1) == truth
+    top2 = np.argsort(-p, axis=1)[:, :2]
+    return {
+        "method": "temperature scaling on 5-fold grouped out-of-fold decision values",
+        "temperature": round(temperature, 4),
+        "confidentAt": CONFIDENT_AT,
+        "expected_calibration_error_before": round(ece(probabilities(1.0)), 4),
+        "expected_calibration_error_after": round(ece(p), 4),
+        "confident_share": round(float(confident.mean()), 4),
+        "accuracy_when_confident": round(float(correct[confident].mean()), 4) if confident.any() else None,
+        "top2_accuracy_when_unsure": round(float(np.mean([truth[i] in top2[i] for i in np.where(~confident)[0]])), 4)
+        if (~confident).any() else None,
+    }
+
+
 def train(
     rows: list[dict[str, str]],
     output_dir: Path,
@@ -284,6 +351,7 @@ def train(
     evaluation["real_world_performance_claim"] = False
     final_model = _build_model(evaluation["final_model_selection"]["selected_model"])
     final_model.fit([row["text"] for row in rows], [row["label"] for row in rows])
+    evaluation["calibration"] = calibrate(rows, evaluation["final_model_selection"]["selected_model"])
     output_dir.mkdir(parents=True, exist_ok=True)
     model_path = output_dir / "category_model.joblib"
     joblib.dump(final_model, model_path)
@@ -292,6 +360,7 @@ def train(
         model_path,
         output_dir / "category_model.runtime.json",
         data_status,
+        calibration={key: evaluation["calibration"][key] for key in ("temperature", "confidentAt")},
     )
     (output_dir / "evaluation.json").write_text(
         json.dumps(evaluation, indent=2, ensure_ascii=True) + "\n",
