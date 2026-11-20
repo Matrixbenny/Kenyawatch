@@ -153,21 +153,55 @@ function morphologyExtras(normalizedText, rawRules) {
   return extras;
 }
 
-// The text the category model sees: the glossary-expanded report, followed by
-// the street-language stems, which are glossary-expanded on their own so that a
-// phrase can never be matched across the join.
-function prepareModelText(rawText, rawRules) {
+// Concept layer: formal and street wording of the same idea ("unofficial
+// payment", "kitu kidogo" -> rushwa bribe) share one token such as
+// concept_bribe, so what the model learns from formal reports carries over to
+// informal ones. Phrases match whole words only.
+const conceptCache = new WeakMap();
+
+function conceptPatterns(concepts) {
+  if (conceptCache.has(concepts)) return conceptCache.get(concepts);
+  const patterns = Object.keys(concepts.concepts).sort().map((name) => {
+    const phrases = [...new Set(concepts.concepts[name])]
+      .sort((a, b) => b.length - a.length || (a < b ? -1 : a > b ? 1 : 0));
+    const alternation = phrases.map((phrase) => phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+    return { name, pattern: new RegExp(`(?<![\\p{L}\\p{N}])(?:${alternation})(?![\\p{L}\\p{N}])`, 'u') };
+  });
+  conceptCache.set(concepts, patterns);
+  return patterns;
+}
+
+function conceptTokens(text, concepts) {
+  return conceptPatterns(concepts).filter(({ pattern }) => pattern.test(text)).map(({ name }) => `concept_${name}`);
+}
+
+function loadDefaultConcepts(conceptsPath = path.resolve(__dirname, '../../ml/lingo/concepts.json')) {
+  return JSON.parse(fs.readFileSync(conceptsPath, 'utf8'));
+}
+
+// The text the category model sees: the glossary-expanded report, then the
+// street-language stems (glossary-expanded on their own so that a phrase can
+// never be matched across the join), then one token per concept expressed.
+function prepareModelText(rawText, rawRules, concepts = null) {
   const { normalizeText, expandLingoTerms } = require('./kenyaLingo');
   const normalized = normalizeText(rawText);
-  const expanded = expandLingoTerms(normalized);
-  if (!rawRules) return expanded;
-  const extras = morphologyExtras(normalized, rawRules);
-  return extras.length ? `${expanded} ${expandLingoTerms(extras.join(' '))}`.trim() : expanded;
+  let text = expandLingoTerms(normalized);
+  if (rawRules) {
+    const extras = morphologyExtras(normalized, rawRules);
+    if (extras.length) text = `${text} ${expandLingoTerms(extras.join(' '))}`.trim();
+  }
+  if (concepts) {
+    const tokens = conceptTokens(text, concepts);
+    if (tokens.length) text = `${text} ${tokens.join(' ')}`;
+  }
+  return text;
 }
 
 module.exports = {
   analyseToken: (token, rules) => analyseToken(token, compileRules(rules)),
   morphologyExtras,
+  conceptTokens,
   prepareModelText,
-  loadDefaultRules
+  loadDefaultRules,
+  loadDefaultConcepts
 };

@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "source": "Concepts follow the elements of the offences in the Anti-Corruption and Economic Crimes Act 2003 and the Bribery Act 2016, with standard English and Kiswahili dictionary terms, the project's Sheng glossary output, and widely documented Sheng words for money and police (gavaa from Beck 2015). Phrases are matched as whole words after the glossary and the street-language layer.",
+  "concepts": {
+    "bribe": [
+      "bribe", "bribes", "bribery", "bribed", "kickback", "kickbacks", "inducement", "unofficial payment",
+      "unofficial fee", "facilitation fee", "under the table", "rushwa", "hongo", "kitu kidogo",
+      "malipo yasiyo rasmi", "pesa ya mkono", "toa kitu"
+    ],
+    "demand": [
+      "demand", "demanded", "demanding", "demands", "ask for", "asked for", "asking for", "solicit",
+      "solicited", "dai", "daiwa", "itisha", "omba", "taka", "wanted", "want"
+    ],
+    "money": [
+      "money", "cash", "payment", "pay", "paid", "shillings", "ksh", "kes", "fee", "pesa", "fedha",
+      "malipo", "lipa", "doo", "ganji", "chapaa", "ngiri"
+    ],
+    "threat": [
+      "threat", "threats", "threaten", "threatened", "threatening", "intimidate", "intimidated",
+      "intimidation", "coerce", "coerced", "force", "forced", "extort", "extorted", "extortion",
+      "harass", "harassed", "harassment", "arrest", "arrested", "detain", "impound", "confiscate",
+      "tishia", "vitisho", "lazimisha", "lazimishwa", "kamata", "kufungwa", "funga"
+    ],
+    "public_funds_loss": [
+      "embezzle", "embezzled", "embezzlement", "misappropriate", "misappropriated", "misappropriation",
+      "divert", "diverted", "diversion", "siphon", "siphoned", "pocketed", "steal", "stole", "stolen",
+      "theft", "missing funds", "public funds", "unaccounted", "fedha za umma", "pesa za umma",
+      "kuiba", "iba", "ibiwa", "chota", "kula", "liwa", "potea", "fujo"
+    ],
+    "procurement": [
+      "tender", "tenders", "bid", "bids", "bidder", "bidding", "procurement", "supplier", "suppliers",
+      "contractor", "contract", "contracts", "invoice", "invoices", "quotation", "inflated", "overpriced",
+      "lpo", "zabuni", "mkandarasi", "mzabuni", "ununuzi"
+    ],
+    "family_favour": [
+      "relative", "relatives", "nephew", "niece", "cousin", "brother", "sister", "son", "daughter", "wife",
+      "husband", "in law", "family", "clan", "tribe", "nepotism", "favoritism", "favouritism", "favoured",
+      "favored", "ndugu", "binamu", "mpwa", "shemeji", "mkwe", "familia", "ukoo", "kabila", "upendeleo"
+    ],
+    "forgery": [
+      "forge", "forged", "forgery", "fake", "fabricate", "fabricated", "falsify", "falsified",
+      "counterfeit", "doctored", "altered", "alter", "tamper", "tampered", "feki", "bandia", "ghushi",
+      "kughushi", "ghushiwa"
+    ],
+    "document": [
+      "certificate", "document", "documents", "record", "records", "permit", "licence", "license",
+      "receipt", "stamp", "signature", "id", "title deed", "cheti", "hati", "kibali", "leseni",
+      "stakabadhi", "sahihi", "stempu"
+    ],
+    "own_interest": [
+      "conflict of interest", "own company", "his company", "her company", "owns", "owned", "shares",
+      "shareholder", "stake", "business partner", "undisclosed", "did not declare", "kampuni yake",
+      "maslahi", "hisa"
+    ],
+    "misuse_power": [
+      "abuse of office", "abuse", "abused", "misuse", "misused", "power", "authority", "position",
+      "official vehicle", "government vehicle", "mamlaka", "cheo", "matumizi mabaya", "gari la serikali"
+    ],
+    "official": [
+      "officer", "official", "officials", "clerk", "inspector", "police", "policeman", "chief", "councillor",
+      "governor", "mca", "afisa", "karani", "polisi", "askari", "kanjo", "karao", "sanse", "gavaa"
+    ],
+    "service": [
+      "service", "services", "serve", "approve", "approval", "process", "processing", "huduma",
+      "hudumia", "idhinisha", "pitisha"
+    ]
+  }
+}

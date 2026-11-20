@@ -61,3 +61,43 @@ test('the model scores report text through the preprocessing stored in its artef
   const withoutLayer = { ...model, preprocessing: { normaliser: 'kenya-lingo', morphology: null } };
   assert.equal(classifyText({ title: 'Kanjo', description: 'anamwitishanga pesa' }, withoutLayer).suggestion, 'Other');
 });
+
+test('formal and street wording of the same idea share one concept token', () => {
+  const { conceptTokens, loadDefaultConcepts } = require('../utils/shengMorphology');
+  const concepts = loadDefaultConcepts();
+  const formal = prepareModelText('The officer asked for an unofficial payment', rules, concepts);
+  const street = prepareModelText('Kanjo alinidai kitu kidogo', rules, concepts);
+  for (const token of ['concept_bribe', 'concept_demand']) {
+    assert.ok(formal.split(' ').includes(token), `${token} in formal text`);
+    assert.ok(street.split(' ').includes(token), `${token} in street text`);
+  }
+  // Whole words only: "paymentless" is not "payment".
+  assert.deepEqual(conceptTokens('paymentless', { concepts: { money: ['payment'] } }), []);
+});
+
+test('a calibrated model says when it is unsure and names the runner-up, without a number', () => {
+  const model = {
+    schemaVersion: 1,
+    model: 'LinearSVC',
+    modelVersion: 'test-version',
+    trainingDataStatus: 'synthetic_only',
+    realWorldPerformanceClaim: false,
+    categories: ['Bribery', 'Extortion', 'Other'],
+    calibration: { temperature: 1, confidentAt: 0.6 },
+    features: { word: { vocabulary: { bribe: 0, threat: 1 }, idf: [1, 1], ngramRange: [1, 1] } },
+    weights: [[3, 0], [0, 3], [0, 0]],
+    intercepts: [0, 0, 0]
+  };
+  const sure = classifyText({ title: 'bribe', description: '' }, model);
+  assert.equal(sure.suggestion, 'Bribery');
+  assert.equal(sure.confidence, 'high');
+  assert.equal(Object.hasOwn(sure, 'alternative'), false);
+
+  const unsure = classifyText({ title: 'bribe', description: 'threat' }, model);
+  assert.equal(unsure.confidence, 'low');
+  assert.ok(['Bribery', 'Extortion'].includes(unsure.alternative));
+  for (const result of [sure, unsure]) {
+    assert.equal(Object.hasOwn(result, 'score'), false);
+    assert.equal(Object.hasOwn(result, 'probability'), false);
+  }
+});

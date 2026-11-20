@@ -29,10 +29,11 @@ function readStdin() {
     process.stdout.write(JSON.stringify(texts.map((text) => normaliseForMatching(text))));
   } else if (command === 'prepare') {
     // The exact text the category model sees (glossary + street-language stems).
-    const { prepareModelText, loadDefaultRules } = require('../utils/shengMorphology');
+    const { prepareModelText, loadDefaultRules, loadDefaultConcepts } = require('../utils/shengMorphology');
     const rules = loadDefaultRules();
+    const concepts = loadDefaultConcepts();
     const texts = JSON.parse(await readStdin());
-    process.stdout.write(JSON.stringify(texts.map((text) => prepareModelText(text, rules))));
+    process.stdout.write(JSON.stringify(texts.map((text) => prepareModelText(text, rules, concepts))));
   } else if (command === 'plain') {
     const texts = JSON.parse(await readStdin());
     process.stdout.write(JSON.stringify(texts.map((text) => normalizeText(text))));

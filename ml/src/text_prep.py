@@ -19,6 +19,7 @@ from pathlib import Path
 LINGO_DIR = Path(__file__).resolve().parents[1] / "lingo"
 GLOSSARY_PATH = LINGO_DIR / "glossary_snapshot.json"
 MORPHOLOGY_PATH = LINGO_DIR / "sheng_morphology.json"
+CONCEPTS_PATH = LINGO_DIR / "concepts.json"
 VOWELS = set("aeiou")
 LETTERS_ONLY = re.compile(r"^[a-z]+$")
 
@@ -38,6 +39,28 @@ def load_glossary() -> dict[str, str]:
 @lru_cache(maxsize=None)
 def load_morphology_rules() -> dict:
     return json.loads(MORPHOLOGY_PATH.read_text(encoding="utf-8"))
+
+
+@lru_cache(maxsize=None)
+def load_concepts() -> dict:
+    return json.loads(CONCEPTS_PATH.read_text(encoding="utf-8"))
+
+
+@lru_cache(maxsize=None)
+def _concept_patterns(concepts_json: str) -> tuple:
+    concepts = json.loads(concepts_json)["concepts"]
+    patterns = []
+    for name in sorted(concepts):
+        phrases = sorted(set(concepts[name]), key=lambda item: (-len(item), item))
+        alternation = "|".join(re.escape(phrase) for phrase in phrases)
+        patterns.append((name, re.compile(r"(?<![^\W_])(?:" + alternation + r")(?![^\W_])")))
+    return tuple(patterns)
+
+
+def concept_tokens(text: str, concepts: dict | None = None) -> list[str]:
+    """One token per concept present, e.g. concept_bribe, in alphabetical order of concept."""
+    patterns = _concept_patterns(json.dumps(concepts or load_concepts(), sort_keys=True))
+    return [f"concept_{name}" for name, pattern in patterns if pattern.search(text)]
 
 
 @lru_cache(maxsize=None)
@@ -174,16 +197,22 @@ def morphology_extras(normalized: str, rules: dict | None = None) -> list[str]:
     return extras
 
 
-def prepare_model_text(value: str, morphology: bool = True) -> str:
+def prepare_model_text(value: str, morphology: bool = True, concepts: bool = True) -> str:
     """The text the category model sees: the glossary-expanded report, then the
-    street-language stems, expanded on their own so no phrase spans the join."""
+    street-language stems (expanded on their own so no phrase spans the join),
+    then one token for each concept the text expresses."""
     normalized = normalize_text(value)
-    expanded = expand_lingo_terms(normalized)
-    if not morphology:
-        return expanded
-    extras = morphology_extras(normalized)
-    return f"{expanded} {expand_lingo_terms(' '.join(extras))}".strip() if extras else expanded
+    text = expand_lingo_terms(normalized)
+    if morphology:
+        extras = morphology_extras(normalized)
+        if extras:
+            text = f"{text} {expand_lingo_terms(' '.join(extras))}".strip()
+    if concepts:
+        tokens = concept_tokens(text)
+        if tokens:
+            text = f"{text} {' '.join(tokens)}"
+    return text
 
 
-def prepare_batch(texts, morphology: bool = True) -> list[str]:
-    return [prepare_model_text(text, morphology) for text in texts]
+def prepare_batch(texts, morphology: bool = True, concepts: bool = True) -> list[str]:
+    return [prepare_model_text(text, morphology, concepts) for text in texts]

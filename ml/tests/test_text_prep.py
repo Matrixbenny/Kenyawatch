@@ -49,7 +49,8 @@ class StreetLanguageTests(unittest.TestCase):
     def test_original_words_are_kept(self) -> None:
         prepared = prepare_model_text("Walinidai pesa")
         self.assertTrue(prepared.startswith("walinidai pesa "))
-        self.assertEqual(prepare_model_text("Walinidai pesa", morphology=False), normalise_for_matching("Walinidai pesa"))
+        self.assertEqual(prepare_model_text("Walinidai pesa", morphology=False, concepts=False), normalise_for_matching("Walinidai pesa"))
+        self.assertTrue(prepare_model_text("Walinidai pesa").endswith("concept_money"))
 
     @unittest.skipUnless(NODE, "Node.js and the backend packages are needed for the parity check")
     def test_python_and_live_api_prepare_text_identically(self) -> None:
