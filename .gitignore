@@ -1,9 +1,6 @@
-# Ignore everything by default - only the story doc + actual app code are tracked.
+# Ignore everything by default - only the system's code and deployment files are tracked.
 /*
 !/.gitignore
-!/Docs/
-/Docs/*
-!/Docs/my IS story.md
 !/backend/
 !/frontend/
 !/agency-portal/
