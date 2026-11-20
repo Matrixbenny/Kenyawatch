@@ -2,6 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { CATEGORIES } = require('./categories');
 const { normaliseForMatching } = require('./kenyaLingo');
+const { prepareModelText } = require('./shengMorphology');
 
 const DEFAULT_MODEL_PATH = path.resolve(__dirname, '../../ml/artifacts/category_model.runtime.json');
 const MAX_MODEL_BYTES = 100 * 1024 * 1024;
@@ -50,6 +51,17 @@ function validateModel(model) {
       weights.some((weight) => !Number.isFinite(weight))) ||
     model.intercepts.some((value) => !Number.isFinite(value))) {
     throw new ModelArtifactError('The experimental category model has invalid classifier weights.');
+  }
+
+  const morphology = model.preprocessing?.morphology;
+  if (morphology != null) {
+    const lists = ['subject', 'tam', 'relative', 'object', 'negativeSubject', 'negativeTam', 'habitual'];
+    if (typeof morphology !== 'object' ||
+      lists.some((key) => !Array.isArray(morphology[key]) || morphology[key].some((item) => typeof item !== 'string' || !/^[a-z]+$/.test(item))) ||
+      typeof morphology.nounPlural !== 'string' ||
+      ['minStem', 'minNounRest', 'minToken'].some((key) => !Number.isInteger(morphology[key]) || morphology[key] < 1)) {
+      throw new ModelArtifactError('The experimental category model has invalid street-language preprocessing rules.');
+    }
   }
 
   for (const [name, vectorizer] of Object.entries({ word, ...(char ? { char } : {}) })) {
@@ -150,10 +162,14 @@ function scoreCategories({ title, description }, model = loadModel()) {
 }
 
 function decisionValues({ title, description }, model) {
-  // Apply the same Kenya-lingo expansion used at training-data export time
-  // (ml/scripts/export-reviewed-dataset.js), so Sheng/Kiswahili/dialect and
-  // mixed-language narratives are scored in the vocabulary the model knows.
-  const fullText = normaliseForMatching(`${title} ${description}`);
+  // Prepare the text exactly as the model's training text was prepared
+  // (ml/src/text_prep.py): the Kenya-lingo glossary and, when the artefact
+  // carries them, the street-language morphology rules (Beck 2015). Older
+  // artefacts without a preprocessing record keep the glossary-only behaviour.
+  const raw = `${title} ${description}`;
+  const fullText = model.preprocessing
+    ? prepareModelText(raw, model.preprocessing.morphology || null)
+    : normaliseForMatching(raw);
   const word = model.features.word;
   const char = model.features.char;
   const wordCounts = new Map();

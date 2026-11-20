@@ -16,6 +16,7 @@ WORKDIR /app
 COPY ml/requirements.txt ml/requirements.txt
 RUN pip install --no-cache-dir -r ml/requirements.txt
 COPY ml/src ml/src
+COPY ml/lingo/glossary_snapshot.json ml/lingo/sheng_morphology.json ml/lingo/
 COPY ml/data/synthetic ml/data/synthetic
 RUN python -m ml.src.train ml/data/synthetic/kenya_watch_synthetic_combined.csv > /dev/null
 

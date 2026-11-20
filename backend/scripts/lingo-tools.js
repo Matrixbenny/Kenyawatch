@@ -27,6 +27,12 @@ function readStdin() {
   } else if (command === 'normalise') {
     const texts = JSON.parse(await readStdin());
     process.stdout.write(JSON.stringify(texts.map((text) => normaliseForMatching(text))));
+  } else if (command === 'prepare') {
+    // The exact text the category model sees (glossary + street-language stems).
+    const { prepareModelText, loadDefaultRules } = require('../utils/shengMorphology');
+    const rules = loadDefaultRules();
+    const texts = JSON.parse(await readStdin());
+    process.stdout.write(JSON.stringify(texts.map((text) => prepareModelText(text, rules))));
   } else if (command === 'plain') {
     const texts = JSON.parse(await readStdin());
     process.stdout.write(JSON.stringify(texts.map((text) => normalizeText(text))));
@@ -38,7 +44,7 @@ function readStdin() {
       evidenceCount: report.evidenceCount || 0,
     }).category)));
   } else {
-    console.error('usage: node scripts/lingo-tools.js export-lexicon | normalise | plain | classify');
+    console.error('usage: node scripts/lingo-tools.js export-lexicon | normalise | prepare | plain | classify');
     process.exit(2);
   }
 })();

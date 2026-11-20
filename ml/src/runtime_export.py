@@ -17,8 +17,21 @@ def export_runtime_model(model: Any, model_path: Path, runtime_path: Path, data_
     else:
         vectorizers = {"word": feature_transformer}
 
+    # Record exactly how training text was prepared, so the API prepares report
+    # text the same way. The morphology rules travel inside the artefact.
+    prep_step = model.named_steps.get("prep")
+    morphology_on = bool(prep_step is not None and (prep_step.kw_args or {}).get("morphology"))
+    from ml.src.text_prep import GLOSSARY_PATH, load_morphology_rules
+
+    preprocessing = {
+        "normaliser": "kenya-lingo",
+        "glossarySha256": hashlib.sha256(GLOSSARY_PATH.read_bytes()).hexdigest(),
+        "morphology": load_morphology_rules() if morphology_on else None,
+    }
+
     runtime_model = {
         "schemaVersion": 1,
+        "preprocessing": preprocessing,
         "model": model.named_steps["classifier"].__class__.__name__,
         "modelVersion": model_sha256[:16],
         "trainingDataStatus": data_status,

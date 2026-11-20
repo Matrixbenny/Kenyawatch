@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "source": "Swahili verbal frame as described for Sheng by Beck (2015), following Schadeberg's Swahili morphology. Sheng keeps the Swahili prefixes and varies the stem, so the stem is exposed as an extra feature.",
+  "subject": ["ni", "u", "a", "tu", "m", "mu", "wa", "i", "li", "ya", "ki", "vi", "zi", "ku", "yu", "pa"],
+  "tam": ["na", "li", "me", "ta", "ki", "nge", "ngali", "ka", "ja", "sha", "si"],
+  "relative": ["ye", "o", "cho", "vyo", "zo", "lo", "yo", "po", "ko", "mo"],
+  "object": ["ni", "ku", "m", "mw", "tu", "wa", "i", "li", "ya", "ki", "vi", "zi", "ji"],
+  "negativeSubject": ["si", "hu", "ha", "hatu", "ham", "hamu", "hawa", "hai", "hali", "haya", "haki", "havi", "hazi", "haku", "hayu"],
+  "negativeTam": ["ku", "ta", "ja", "na"],
+  "habitual": ["hu"],
+  "nounPlural": "ma",
+  "minStem": 3,
+  "minNounRest": 4,
+  "minToken": 4
+}

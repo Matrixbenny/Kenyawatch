@@ -177,6 +177,9 @@ class DatasetAuditTests(unittest.TestCase):
             self.assertFalse(runtime_model["realWorldPerformanceClaim"])
             self.assertCountEqual(runtime_model["categories"], CATEGORIES)
             self.assertIn("word", runtime_model["features"])
+            # The artefact records how text was prepared, so the API prepares it the same way.
+            self.assertEqual(runtime_model["preprocessing"]["normaliser"], "kenya-lingo")
+            self.assertIn("subject", runtime_model["preprocessing"]["morphology"])
 
 
 if __name__ == "__main__":

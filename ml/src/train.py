@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import statistics
 import sys
 from collections import Counter
@@ -11,6 +12,7 @@ from typing import Any
 
 from ml.src.dataset import CATEGORIES, DatasetError, read_rows, validate_for_training
 from ml.src.runtime_export import export_runtime_model
+from ml.src.text_prep import prepare_batch
 
 MODEL_CANDIDATES = ("word_logistic", "word_char_linear_svc")
 
@@ -47,9 +49,23 @@ def _metrics(y_true: list[str], y_pred: list[str], labels: tuple[str, ...]) -> d
     }
 
 
-def _build_model(model_name: str) -> Any:
+def street_language_enabled() -> bool:
+    """The Beck-informed morphology layer is on unless KW_MORPHOLOGY=0 (used for comparisons)."""
+    return os.environ.get("KW_MORPHOLOGY", "1") != "0"
+
+
+def _build_model(model_name: str, morphology: bool | None = None) -> Any:
     from sklearn.feature_extraction.text import TfidfVectorizer
     from sklearn.pipeline import FeatureUnion, Pipeline
+    from sklearn.preprocessing import FunctionTransformer
+
+    # Text is prepared exactly as the live API prepares it (glossary, then the
+    # street-language stems). The step has no fitted state, so it cannot leak
+    # information from validation folds.
+    prep = ("prep", FunctionTransformer(
+        prepare_batch,
+        kw_args={"morphology": street_language_enabled() if morphology is None else morphology},
+    ))
 
     word_features = TfidfVectorizer(
         analyzer="word",
@@ -64,6 +80,7 @@ def _build_model(model_name: str) -> Any:
         from sklearn.linear_model import LogisticRegression
 
         return Pipeline([
+            prep,
             ("features", word_features),
             ("classifier", LogisticRegression(
                 class_weight="balanced",
@@ -86,6 +103,7 @@ def _build_model(model_name: str) -> Any:
             )),
         ])
         return Pipeline([
+            prep,
             ("features", features),
             ("classifier", LinearSVC(
                 class_weight="balanced",
