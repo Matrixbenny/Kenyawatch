@@ -5,6 +5,7 @@ services:
     name: kenya-watch
     runtime: docker
     plan: free
+    region: frankfurt
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
