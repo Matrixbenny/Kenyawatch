@@ -40,6 +40,8 @@ const translations = {
     label_subCounty: "Sub-county",
     label_incidentDate: "When did this happen?",
     label_evidence: "Evidence (optional)",
+    help_evidence:
+      "Location and device details are removed from JPEG and PNG photos automatically. Other files (WebP images, video, audio, PDF and Word documents) are stored exactly as uploaded and may contain GPS, device or author details; remove them first if they could identify you.",
     label_demographic: "Demographic (optional)",
     btn_submitReport: "Submit Report",
     btn_submitting: "Submitting...",
@@ -145,6 +147,8 @@ const translations = {
     label_subCounty: "Kaunti Ndogo",
     label_incidentDate: "Tukio hili lilitokea lini?",
     label_evidence: "Ushahidi (si lazima)",
+    help_evidence:
+      "Taarifa za mahali na kifaa huondolewa kiotomatiki kwenye picha za JPEG na PNG. Faili nyingine (picha za WebP, video, sauti, PDF na hati za Word) huhifadhiwa jinsi zilivyopakiwa na huenda zikawa na taarifa za GPS, kifaa au mwandishi; ziondoe kwanza ikiwa zinaweza kukutambulisha.",
     label_demographic: "Takwimu Binafsi (si lazima)",
     btn_submitReport: "Wasilisha Ripoti",
     btn_submitting: "Inawasilisha...",

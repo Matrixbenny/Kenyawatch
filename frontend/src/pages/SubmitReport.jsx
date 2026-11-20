@@ -426,7 +426,7 @@ function SubmitReport() {
             onChange={(e) => setFiles(Array.from(e.target.files))}
           />
           <div className="kw-helper">
-            Location and device details are removed from JPEG and PNG photos automatically. Other files (WebP images, video, audio, PDF and Word documents) are stored exactly as uploaded and may contain GPS, device or author details; remove them first if they could identify you.
+            {t('help_evidence')}
           </div>
         </div>
 
