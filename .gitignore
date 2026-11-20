@@ -34,3 +34,4 @@ ml/data/lingo/
 
 # Copyrighted reference material kept locally only: never commit or redistribute
 ml/data/*.pdf
+ml/*.pdf
