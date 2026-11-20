@@ -261,8 +261,10 @@ function buildPhrasePatterns(glossary) {
     .sort((left, right) => right[0].length - left[0].length)
     .map(([term, canonical]) => ({
       // Match whole words/phrases, refusing to fire when the token is part of a
-      // longer word (so "chaidai" never also matches "chai").
-      pattern: new RegExp(`(?<![\p{L}\p{N}])${escapeRegExp(term)}(?![\p{L}\p{N}])`, 'gu'),
+      // longer word (so "chaidai" never also matches "chai", and "mkuchoma" is
+      // not read as "kuchoma"). The backslashes are doubled because a single
+      // "\p" inside a template literal is silently reduced to "p".
+      pattern: new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegExp(term)}(?![\\p{L}\\p{N}])`, 'gu'),
       canonical
     }));
 }
