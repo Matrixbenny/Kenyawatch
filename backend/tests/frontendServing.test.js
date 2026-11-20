@@ -31,7 +31,8 @@ test('production serves the built app for client routes but never for /api', asy
   assert.match(deepLink.text, /Kenya Watch/);
 
   const health = await request(app).get('/api/health');
-  assert.deepEqual(health.body, { status: 'ok' });
+  assert.equal(health.body.status, 'ok');
+  assert.equal(typeof health.body.model.loaded, 'boolean');
 
   const missingApi = await request(app).get('/api/no-such-route');
   assert.equal(missingApi.status, 404);

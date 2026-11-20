@@ -93,8 +93,23 @@ function createApp() {
   }));
 
   // Used by the hosting platform's health check; reveals nothing about the data.
+  // It also says which category model is loaded, so a deployment can be verified.
   app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok' });
+    let model = { loaded: false };
+    try {
+      const { loadModel } = require('./utils/experimentalCategoryModel');
+      const artefact = loadModel();
+      model = {
+        loaded: true,
+        version: artefact.modelVersion,
+        streetLanguageLayer: Boolean(artefact.preprocessing?.morphology),
+        conceptLayer: Boolean(artefact.preprocessing?.concepts),
+        calibratedConfidence: Boolean(artefact.calibration)
+      };
+    } catch {
+      // The model is optional; reporting and review work without it.
+    }
+    res.json({ status: 'ok', model });
   });
 
   // In production one service serves the API, the agency portal and the built
