@@ -86,7 +86,7 @@ def beck_rewrite(text: str, rng: random.Random) -> str:
 def build(mode: str) -> Pipeline:
     steps = []
     if mode != "raw":
-        steps.append(("prep", FunctionTransformer(prepare_batch, kw_args={"morphology": mode == "morphology"})))
+        steps.append(("prep", FunctionTransformer(prepare_batch, kw_args={"morphology": mode == "morphology", "concepts": False})))
     steps.append(("features", FeatureUnion([
         ("word", TfidfVectorizer(lowercase=True, strip_accents="unicode", ngram_range=(1, 2),
                                  min_df=2, max_features=50000, sublinear_tf=True)),
