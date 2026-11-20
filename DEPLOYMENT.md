@@ -59,6 +59,31 @@ with a weak `JWT_SECRET`, no SMTP, no Admin password hash, a non-HTTPS
 `FRONTEND_ORIGIN` or MFA turned off. If a deploy fails, the log names the
 setting.
 
+## Databases: Atlas main, local mirror
+
+MongoDB Atlas is the main database. The live site and the development server
+both use it (`MONGO_URI` in each environment), so the same reports appear
+everywhere. The local MongoDB is kept as a read-only mirror of Atlas, for
+backup and offline inspection:
+
+| Setting (backend/.env) | Purpose |
+|---|---|
+| `MONGO_URI` | Atlas connection string, used by the app |
+| `ATLAS_URI` | the same Atlas string, read by the mirror and copy scripts |
+| `LOCAL_MONGO_URI` | the local database, e.g. `mongodb://localhost:27017/kenya_watch` |
+| `SCHEDULER_ENABLED=false` | lets only the live server send reminders and run retention |
+
+- `npm run mirror` (in `backend/`) refreshes the local copy from Atlas. On
+  Windows a scheduled task, "Kenya Watch Atlas mirror", runs
+  `scripts/mirror-atlas.cmd` every 10 minutes and logs to `backend/mirror.log`.
+- The mirror only ever writes to a database on this computer. If it finds
+  documents that exist only locally it stops instead of deleting them. Either
+  re-run the mirror with `--force` to discard them, or, only if the local copy
+  is the one to keep, run `node scripts/copy-database.js --replace`, which
+  overwrites Atlas with the whole local database.
+- Automated tests use the separate `kenya_watch_test` database and never
+  touch Atlas.
+
 ## Optional settings
 
 - Phone alerts: `node scripts/generate-vapid-keys.js`, then set `VAPID_PUBLIC_KEY`,

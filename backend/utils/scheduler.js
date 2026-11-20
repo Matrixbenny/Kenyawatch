@@ -19,6 +19,12 @@ async function runDailyJobs() {
 
 function startScheduler() {
   if (process.env.NODE_ENV === 'test') return null;
+  // When a development server shares the live database, only the live server
+  // should run these jobs, or agencies could be reminded twice.
+  if (process.env.SCHEDULER_ENABLED === 'false') {
+    console.log('[scheduler] disabled (SCHEDULER_ENABLED=false); the live server runs the daily jobs.');
+    return null;
+  }
   setTimeout(runDailyJobs, 30 * 1000).unref();
   return setInterval(runDailyJobs, DAY).unref();
 }

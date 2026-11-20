@@ -1,5 +1,5 @@
 // Copies every collection (including GridFS evidence files and all indexes) from
-// the local database in MONGO_URI to the hosted one in ATLAS_URI, both read from
+// the local database in LOCAL_MONGO_URI (or MONGO_URI) to the hosted one in ATLAS_URI, both read from
 // backend/.env. The source is only read. The copy stops if the target already
 // holds data, unless --replace is given.
 //
@@ -9,9 +9,9 @@ require('dotenv').config({ quiet: true });
 const { MongoClient } = require('mongodb');
 
 async function main() {
-  const source = process.env.MONGO_URI;
+  const source = process.env.LOCAL_MONGO_URI || process.env.MONGO_URI;
   const target = process.env.ATLAS_URI;
-  if (!source || !target) throw new Error('Set MONGO_URI (local) and ATLAS_URI (hosted) in backend/.env.');
+  if (!source || !target) throw new Error('Set LOCAL_MONGO_URI (local) and ATLAS_URI (hosted) in backend/.env.');
   if (source === target) throw new Error('MONGO_URI and ATLAS_URI are the same database.');
   const replace = process.argv.includes('--replace');
 
