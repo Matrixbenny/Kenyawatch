@@ -417,6 +417,10 @@ function CaseDetail({ report, agencies, agenciesError, onChanged, isAdmin }) {
           {mlSuggestion && (
             <div className="kw-pro-meta">
               <b>Model suggestion only:</b> {mlSuggestion.suggestion}
+              {mlSuggestion.confidence === 'high' && <span className="kw-faded"> (the model is fairly sure)</span>}
+              {mlSuggestion.confidence === 'low' && mlSuggestion.alternative && (
+                <div><b>The model is unsure:</b> it could also be {mlSuggestion.alternative}. Rely on your own reading.</div>
+              )}
               <div><b>Training data:</b> {mlSuggestion.trainingDataStatus === 'synthetic_only_not_for_real_world_validation_or_production_training' ? 'Synthetic examples only' : 'Not validated for real-world performance'}</div>
               <div className="kw-faded">{mlSuggestion.warning}</div>
               <div className="kw-faded">Model version: {mlSuggestion.modelVersion}</div>

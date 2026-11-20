@@ -100,6 +100,33 @@ test('shows the synthetic-trained model output only as a non-binding suggestion 
   await waitFor(() => expect(api.get).toHaveBeenCalledWith('/reports/case-1/ml-category-suggestion'));
 });
 
+test('shows both likely categories, without any number, when the model is unsure', async () => {
+  const original = api.get.getMockImplementation();
+  api.get.mockImplementation((path) => (path === '/reports/case-1/ml-category-suggestion'
+    ? Promise.resolve({
+      data: {
+        suggestion: 'Bribery',
+        confidence: 'low',
+        alternative: 'Extortion',
+        modelVersion: 'test-model',
+        trainingDataStatus: 'synthetic_only_not_for_real_world_validation_or_production_training',
+        warning: 'Experimental suggestion.'
+      }
+    })
+    : original(path)));
+  render(
+    <MemoryRouter initialEntries={[{ pathname: '/reviewer-queue', state: { focusReportId: 'case-1' } }]}>
+      <Routes>
+        <Route path="/reviewer-queue" element={<ReviewerQueue />} />
+      </Routes>
+    </MemoryRouter>
+  );
+
+  const section = await screen.findByRole('region', { name: 'Experimental ML category suggestion' });
+  await waitFor(() => expect(section).toHaveTextContent('The model is unsure: it could also be Extortion'));
+  expect(section).not.toHaveTextContent(/\d+%/);
+});
+
 test('explains text-similarity suggestions as advisory scores rather than probabilities', async () => {
   api.get.mockImplementation((path) => {
     if (path === '/reports/queue') return Promise.resolve({ data: [report] });
