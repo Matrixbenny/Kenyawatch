@@ -73,6 +73,15 @@ function validateModel(model) {
       throw new ModelArtifactError('The experimental category model has invalid concept preprocessing.');
     }
   }
+  const lexicon = model.preprocessing?.lexicon;
+  if (lexicon != null) {
+    const known = model.preprocessing?.knownWords;
+    if (typeof lexicon !== 'object' || Array.isArray(lexicon) ||
+      Object.entries(lexicon).some(([word, meaning]) => !/^[a-z]+$/.test(word) || typeof meaning !== 'string' || !/^[a-z]+$/.test(meaning)) ||
+      !Array.isArray(known) || known.some((word) => typeof word !== 'string')) {
+      throw new ModelArtifactError('The experimental category model has an invalid Sheng lexicon.');
+    }
+  }
   const calibration = model.calibration;
   if (calibration != null && (!Number.isFinite(calibration.temperature) || calibration.temperature <= 0 ||
     !Number.isFinite(calibration.confidentAt) || calibration.confidentAt <= 0 || calibration.confidentAt >= 1)) {
@@ -181,6 +190,15 @@ function scoreCategories({ title, description }, model = loadModel()) {
     .sort((a, b) => b.score - a.score);
 }
 
+// The training vocabulary used by the Sheng lexicon, built once per model.
+const knownCache = new WeakMap();
+function knownWordSet(model) {
+  const list = model.preprocessing?.knownWords;
+  if (!Array.isArray(list)) return null;
+  if (!knownCache.has(model)) knownCache.set(model, new Set(list));
+  return knownCache.get(model);
+}
+
 function decisionValues({ title, description }, model) {
   // Prepare the text exactly as the model's training text was prepared
   // (ml/src/text_prep.py): the Kenya-lingo glossary and, when the artefact
@@ -188,7 +206,8 @@ function decisionValues({ title, description }, model) {
   // artefacts without a preprocessing record keep the glossary-only behaviour.
   const raw = `${title} ${description}`;
   const fullText = model.preprocessing
-    ? prepareModelText(raw, model.preprocessing.morphology || null, model.preprocessing.concepts || null)
+    ? prepareModelText(raw, model.preprocessing.morphology || null, model.preprocessing.concepts || null,
+      model.preprocessing.lexicon || null, knownWordSet(model))
     : normaliseForMatching(raw);
   const word = model.features.word;
   const char = model.features.char;

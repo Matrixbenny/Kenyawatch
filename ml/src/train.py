@@ -12,7 +12,7 @@ from typing import Any
 
 from ml.src.dataset import CATEGORIES, DatasetError, read_rows, validate_for_training
 from ml.src.runtime_export import export_runtime_model
-from ml.src.text_prep import prepare_batch
+from ml.src.text_prep import TextPrep
 
 MODEL_CANDIDATES = ("word_logistic", "word_char_linear_svc")
 
@@ -54,6 +54,11 @@ def street_language_enabled() -> bool:
     return os.environ.get("KW_MORPHOLOGY", "1") != "0"
 
 
+def lexicon_enabled() -> bool:
+    """The learned Sheng lexicon (unknown words only) is on unless KW_LEXICON=0."""
+    return os.environ.get("KW_LEXICON", "1") != "0"
+
+
 def concepts_enabled() -> bool:
     """The concept layer (ml/lingo/concepts.json) is on unless KW_CONCEPTS=0."""
     return os.environ.get("KW_CONCEPTS", "1") != "0"
@@ -67,17 +72,14 @@ CONFIDENT_AT = 0.6
 def _build_model(model_name: str, morphology: bool | None = None) -> Any:
     from sklearn.feature_extraction.text import TfidfVectorizer
     from sklearn.pipeline import FeatureUnion, Pipeline
-    from sklearn.preprocessing import FunctionTransformer
 
     # Text is prepared exactly as the live API prepares it (glossary, then the
     # street-language stems). The step has no fitted state, so it cannot leak
     # information from validation folds.
-    prep = ("prep", FunctionTransformer(
-        prepare_batch,
-        kw_args={
-            "morphology": street_language_enabled() if morphology is None else morphology,
-            "concepts": concepts_enabled(),
-        },
+    prep = ("prep", TextPrep(
+        morphology=street_language_enabled() if morphology is None else morphology,
+        concepts=concepts_enabled(),
+        lexicon=lexicon_enabled(),
     ))
 
     word_features = TfidfVectorizer(

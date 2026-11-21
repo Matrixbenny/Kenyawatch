@@ -175,6 +175,10 @@ function conceptTokens(text, concepts) {
   return conceptPatterns(concepts).filter(({ pattern }) => pattern.test(text)).map(({ name }) => `concept_${name}`);
 }
 
+function loadDefaultLexicon(lexiconPath = path.resolve(__dirname, '../../ml/lingo/sheng_lexicon.json')) {
+  return JSON.parse(fs.readFileSync(lexiconPath, 'utf8')).entries;
+}
+
 function loadDefaultConcepts(conceptsPath = path.resolve(__dirname, '../../ml/lingo/concepts.json')) {
   return JSON.parse(fs.readFileSync(conceptsPath, 'utf8'));
 }
@@ -182,13 +186,29 @@ function loadDefaultConcepts(conceptsPath = path.resolve(__dirname, '../../ml/li
 // The text the category model sees: the glossary-expanded report, then the
 // street-language stems (glossary-expanded on their own so that a phrase can
 // never be matched across the join), then one token per concept expressed.
-function prepareModelText(rawText, rawRules, concepts = null) {
+// lexicon: Sheng-to-English word pairs learned from parallel text; known: the
+// set of words seen in training. A meaning is added only for words the model
+// never saw, so familiar words (formal Kiswahili, for example) are untouched.
+function prepareModelText(rawText, rawRules, concepts = null, lexicon = null, known = null) {
   const { normalizeText, expandLingoTerms } = require('./kenyaLingo');
   const normalized = normalizeText(rawText);
   let text = expandLingoTerms(normalized);
+  let extras = [];
   if (rawRules) {
-    const extras = morphologyExtras(normalized, rawRules);
+    extras = morphologyExtras(normalized, rawRules);
     if (extras.length) text = `${text} ${expandLingoTerms(extras.join(' '))}`.trim();
+  }
+  if (lexicon && known) {
+    const seen = new Set(text.split(' '));
+    const meanings = [];
+    for (const word of [...normalized.split(' '), ...extras]) {
+      const meaning = Object.prototype.hasOwnProperty.call(lexicon, word) ? lexicon[word] : undefined;
+      if (meaning && !known.has(word) && !seen.has(meaning)) {
+        meanings.push(meaning);
+        seen.add(meaning);
+      }
+    }
+    if (meanings.length) text = `${text} ${meanings.join(' ')}`;
   }
   if (concepts) {
     const tokens = conceptTokens(text, concepts);
@@ -203,5 +223,6 @@ module.exports = {
   conceptTokens,
   prepareModelText,
   loadDefaultRules,
-  loadDefaultConcepts
+  loadDefaultConcepts,
+  loadDefaultLexicon
 };

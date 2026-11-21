@@ -21,15 +21,19 @@ def export_runtime_model(model: Any, model_path: Path, runtime_path: Path, data_
     # Record exactly how training text was prepared, so the API prepares report
     # text the same way. The morphology rules travel inside the artefact.
     prep_step = model.named_steps.get("prep")
-    morphology_on = bool(prep_step is not None and (prep_step.kw_args or {}).get("morphology"))
-    concepts_on = bool(prep_step is not None and (prep_step.kw_args or {}).get("concepts"))
-    from ml.src.text_prep import GLOSSARY_PATH, load_concepts, load_morphology_rules
+    morphology_on = bool(getattr(prep_step, "morphology", False))
+    concepts_on = bool(getattr(prep_step, "concepts", False))
+    lexicon_on = bool(getattr(prep_step, "lexicon", False))
+    from ml.src.text_prep import GLOSSARY_PATH, load_concepts, load_lexicon, load_morphology_rules
 
     preprocessing = {
         "normaliser": "kenya-lingo",
         "glossarySha256": hashlib.sha256(GLOSSARY_PATH.read_bytes()).hexdigest(),
         "morphology": load_morphology_rules() if morphology_on else None,
         "concepts": load_concepts() if concepts_on else None,
+        # Sheng-to-English meanings are added only for words absent from training.
+        "lexicon": load_lexicon() if lexicon_on else None,
+        "knownWords": list(prep_step.known_words_) if lexicon_on else None,
     }
 
     runtime_model = {

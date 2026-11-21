@@ -67,3 +67,25 @@ class StreetLanguageTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ShengLexiconTests(unittest.TestCase):
+    def test_meanings_are_added_only_for_words_unseen_in_training(self) -> None:
+        from ml.src.text_prep import load_lexicon
+        lexicon = load_lexicon()
+        self.assertEqual(lexicon.get("ganji"), "money")
+        known = frozenset({"msee", "wa"})
+        prepared = prepare_model_text("Msee wa kanjo alitaka ganji", lexicon=lexicon, known=known)
+        self.assertIn(" money", prepared)
+        self.assertNotIn(" man ", f" {prepared} ")  # msee is known, so it is not translated
+
+    @unittest.skipUnless(NODE, "Node.js and the backend packages are needed for the parity check")
+    def test_python_and_live_api_apply_the_lexicon_identically(self) -> None:
+        from ml.src.text_prep import known_words, load_lexicon
+        corpus = ROOT / "ml" / "data" / "synthetic" / "kenya_watch_synthetic_combined.csv"
+        rows = [row["text"] for row in csv.DictReader(corpus.open(encoding="utf-8"))]
+        known = known_words(rows[::2])
+        texts = SAMPLES + ["Msee wa kanjo alitaka ganji", "Manzi alikuwa na doo za mradi"] + rows
+        lexicon, known_set = load_lexicon(), frozenset(known)
+        expected = [prepare_model_text(text, lexicon=lexicon, known=known_set) for text in texts]
+        self.assertEqual(expected, node_tool("prepare-known", {"texts": texts, "known": known}))

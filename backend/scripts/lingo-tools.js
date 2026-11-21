@@ -34,6 +34,15 @@ function readStdin() {
     const concepts = loadDefaultConcepts();
     const texts = JSON.parse(await readStdin());
     process.stdout.write(JSON.stringify(texts.map((text) => prepareModelText(text, rules, concepts))));
+  } else if (command === 'prepare-known') {
+    // Same as prepare, plus the Sheng lexicon for words outside a given known set.
+    const { prepareModelText, loadDefaultRules, loadDefaultConcepts, loadDefaultLexicon } = require('../utils/shengMorphology');
+    const { texts, known } = JSON.parse(await readStdin());
+    const rules = loadDefaultRules();
+    const concepts = loadDefaultConcepts();
+    const lexicon = loadDefaultLexicon();
+    const knownSet = new Set(known);
+    process.stdout.write(JSON.stringify(texts.map((text) => prepareModelText(text, rules, concepts, lexicon, knownSet))));
   } else if (command === 'plain') {
     const texts = JSON.parse(await readStdin());
     process.stdout.write(JSON.stringify(texts.map((text) => normalizeText(text))));

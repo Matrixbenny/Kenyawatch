@@ -20,6 +20,7 @@ LINGO_DIR = Path(__file__).resolve().parents[1] / "lingo"
 GLOSSARY_PATH = LINGO_DIR / "glossary_snapshot.json"
 MORPHOLOGY_PATH = LINGO_DIR / "sheng_morphology.json"
 CONCEPTS_PATH = LINGO_DIR / "concepts.json"
+LEXICON_PATH = LINGO_DIR / "sheng_lexicon.json"
 VOWELS = set("aeiou")
 LETTERS_ONLY = re.compile(r"^[a-z]+$")
 
@@ -197,16 +198,40 @@ def morphology_extras(normalized: str, rules: dict | None = None) -> list[str]:
     return extras
 
 
-def prepare_model_text(value: str, morphology: bool = True, concepts: bool = True) -> str:
+@lru_cache(maxsize=None)
+def load_lexicon() -> dict[str, str]:
+    """Sheng-to-English word pairs learned with IBM Model 1 (ml/lingo/learn_sheng_lexicon.py)."""
+    return json.loads(LEXICON_PATH.read_text(encoding="utf-8"))["entries"]
+
+
+def known_words(texts) -> list[str]:
+    """Every normalised word in the training texts, in sorted order."""
+    return sorted({word for text in texts for word in normalize_text(text).split()})
+
+
+def prepare_model_text(value: str, morphology: bool = True, concepts: bool = True,
+                       lexicon: dict[str, str] | None = None, known: frozenset | set | None = None) -> str:
     """The text the category model sees: the glossary-expanded report, then the
     street-language stems (expanded on their own so no phrase spans the join),
+    then the English meaning of Sheng words the model never saw in training,
     then one token for each concept the text expresses."""
     normalized = normalize_text(value)
     text = expand_lingo_terms(normalized)
+    extras: list[str] = []
     if morphology:
         extras = morphology_extras(normalized)
         if extras:
             text = f"{text} {expand_lingo_terms(' '.join(extras))}".strip()
+    if lexicon is not None and known is not None:
+        seen = set(text.split())
+        meanings = []
+        for word in normalized.split() + extras:
+            meaning = lexicon.get(word)
+            if meaning and word not in known and meaning not in seen:
+                meanings.append(meaning)
+                seen.add(meaning)
+        if meanings:
+            text = f"{text} {' '.join(meanings)}"
     if concepts:
         tokens = concept_tokens(text)
         if tokens:
@@ -216,3 +241,34 @@ def prepare_model_text(value: str, morphology: bool = True, concepts: bool = Tru
 
 def prepare_batch(texts, morphology: bool = True, concepts: bool = True) -> list[str]:
     return [prepare_model_text(text, morphology, concepts) for text in texts]
+
+
+class TextPrep:
+    """Scikit-learn step for text preparation. When the Sheng lexicon is on, it
+    records the words seen in training and translates only words outside them,
+    so known words (formal Kiswahili, for example) are never altered."""
+
+    def __init__(self, morphology: bool = True, concepts: bool = True, lexicon: bool = True):
+        self.morphology = morphology
+        self.concepts = concepts
+        self.lexicon = lexicon
+
+    def get_params(self, deep: bool = True) -> dict:
+        return {"morphology": self.morphology, "concepts": self.concepts, "lexicon": self.lexicon}
+
+    def set_params(self, **params):
+        for key, value in params.items():
+            setattr(self, key, value)
+        return self
+
+    def fit(self, X, y=None):
+        self.known_words_ = known_words(X) if self.lexicon else []
+        return self
+
+    def transform(self, X):
+        lexicon = load_lexicon() if self.lexicon else None
+        known = frozenset(self.known_words_) if self.lexicon else None
+        return [prepare_model_text(text, self.morphology, self.concepts, lexicon, known) for text in X]
+
+    def fit_transform(self, X, y=None):
+        return self.fit(X, y).transform(X)
