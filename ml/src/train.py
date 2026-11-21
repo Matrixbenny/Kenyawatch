@@ -346,7 +346,19 @@ def train(
         if any(column in row for row in rows)
     }
     validate_for_training(rows, headers)
-    evaluation = evaluate(rows)
+    if os.environ.get("KW_DEPLOY_BUILD") == "1":
+        # Deployment build: the nested evaluation only reports how good the model
+        # is and does not change it, so it is skipped to keep the image build
+        # short on small build machines. Model selection and calibration still run.
+        selected, scores = _select_model(rows, n_splits=5, random_state=42)
+        evaluation = {
+            "deploy_build": True,
+            "note": "Nested evaluation skipped in the deployment build; run ml.src.train locally for the full evaluation.",
+            "rows": len(rows),
+            "final_model_selection": {"candidate_macro_f1": scores, "selected_model": selected},
+        }
+    else:
+        evaluation = evaluate(rows)
     evaluation["data_status"] = data_status
     evaluation["real_world_performance_claim"] = False
     final_model = _build_model(evaluation["final_model_selection"]["selected_model"])
