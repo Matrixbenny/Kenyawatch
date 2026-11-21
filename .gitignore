@@ -35,3 +35,8 @@ ml/data/lingo/
 # Copyrighted reference material kept locally only: never commit or redistribute
 ml/data/*.pdf
 ml/*.pdf
+
+# Sheng corpora used with the owners' permission for local research only: never commit or redistribute
+ml/sheng.md
+# Word clusters from the rejected experiment (ml/lingo/build_word_clusters.py); rebuild locally if needed
+ml/lingo/word_clusters.json

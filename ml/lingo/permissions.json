@@ -12,6 +12,30 @@
       "granted_on": "2026-11-19",
       "attestation": "Project owner (Benvictor Mwangi) stated on 2026-11-20 that this permission was received by email; the email itself has not been seen by the developer tooling.",
       "reference": "Email from George Maina (BTL East Africa), sent 2026-11-19. Keep the original email with the project records."
+    },
+    {
+      "id": "sheng-parallel-corpus",
+      "name": "English-Sheng parallel sentence corpus (provided by the project owner as ml/sheng.md)",
+      "url": "local file supplied by the project owner",
+      "rights_holder": "Owner of the English and Sheng texts, as identified by the project owner",
+      "language": "Sheng, English",
+      "licence_on_document": "Not stated in the file; the English side matches a copyrighted Bible translation.",
+      "permitted_use": "Academic, non-commercial research for the Kenya Watch project: learning a Sheng-to-English word list and word clusters. Only derived word pairs and cluster labels are stored; the text is never committed or redistributed.",
+      "granted_on": "2026-11-21",
+      "attestation": "Project owner (Benvictor Mwangi) stated on 2026-11-21 that they hold the permission and rights from the owner; the permission document has not been seen by the developer tooling.",
+      "reference": "Keep the owner's written permission with the project records."
+    },
+    {
+      "id": "think-ke-sheng-dataset",
+      "name": "Sheng Dataset (think-ke/sheng-dataset): Sheng dictionary example phrases",
+      "url": "https://github.com/think-ke/sheng-dataset",
+      "rights_holder": "think-ke and the underlying Sheng dictionary's owner",
+      "language": "Sheng",
+      "licence_on_document": "No licence file in the repository (all rights reserved by default); data scraped from an online Sheng dictionary.",
+      "permitted_use": "Academic, non-commercial research: unlabelled text for word clusters. Not committed or redistributed.",
+      "granted_on": "2026-11-21",
+      "attestation": "Project owner (Benvictor Mwangi) stated on 2026-11-21 that they hold the permission and rights; the permission document has not been seen by the developer tooling.",
+      "reference": "Keep the written permission with the project records. ghettoradio.txt named in the README was no longer available (HTTP 404) and was not used."
     }
   ]
 }
