@@ -11,6 +11,7 @@ other and checks that the glossary snapshot matches the live glossary.
 from __future__ import annotations
 
 import json
+import os
 import re
 import unicodedata
 from functools import lru_cache
@@ -19,7 +20,8 @@ from pathlib import Path
 LINGO_DIR = Path(__file__).resolve().parents[1] / "lingo"
 GLOSSARY_PATH = LINGO_DIR / "glossary_snapshot.json"
 MORPHOLOGY_PATH = LINGO_DIR / "sheng_morphology.json"
-CONCEPTS_PATH = LINGO_DIR / "concepts.json"
+# KW_CONCEPTS_FILE points at another concept file; used only to compare candidates.
+CONCEPTS_PATH = Path(os.environ.get("KW_CONCEPTS_FILE") or LINGO_DIR / "concepts.json")
 LEXICON_PATH = LINGO_DIR / "sheng_lexicon.json"
 VOWELS = set("aeiou")
 LETTERS_ONLY = re.compile(r"^[a-z]+$")
