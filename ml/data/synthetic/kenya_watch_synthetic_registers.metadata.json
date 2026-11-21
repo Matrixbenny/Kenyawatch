@@ -1,0 +1,14 @@
+{
+  "status": "synthetic_only_not_for_real_world_validation_or_production_training",
+  "rows": 10000,
+  "scenarios": 2500,
+  "registers": [
+    "English",
+    "Kiswahili",
+    "Mixed",
+    "Sheng"
+  ],
+  "seed": 20261121,
+  "unique_texts": 10000,
+  "note": "Fictional, template-generated reports: each scenario written in English, Kiswahili, mixed English-Kiswahili and Sheng. Judge it by its effect on text it was not generated from."
+}
