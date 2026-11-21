@@ -130,7 +130,9 @@ class DatasetAuditTests(unittest.TestCase):
             for group_index in range(12)
             for item_index in range(5)
         ]
-        with tempfile.TemporaryDirectory() as temporary_directory:
+        # The register supplement is switched off: this test checks the pipeline's
+        # outputs on a tiny corpus, not the deployed training data.
+        with tempfile.TemporaryDirectory() as temporary_directory, patch.dict("os.environ", {"KW_SUPPLEMENT": "0"}):
             result = train(
                 rows,
                 Path(temporary_directory),
@@ -185,6 +187,48 @@ class DatasetAuditTests(unittest.TestCase):
             self.assertGreater(runtime_model["calibration"]["temperature"], 0)
             self.assertEqual(runtime_model["calibration"]["confidentAt"], 0.6)
             self.assertIn("accuracy_when_confident", result["calibration"])
+
+
+class RegisterSupplementTests(unittest.TestCase):
+    def test_register_corpus_is_valid_grouped_and_separate_from_the_test_corpora(self) -> None:
+        from ml.src.dataset import read_rows
+        from ml.src.train import SUPPLEMENT_PATH
+
+        rows, headers = read_rows(SUPPLEMENT_PATH)
+        validate_for_training(rows, headers)
+        self.assertEqual(len(rows), 10000)
+        self.assertEqual(len({row["text"] for row in rows}), 10000)
+        self.assertEqual(Counter(row["language"] for row in rows),
+                         {"English": 2500, "Kiswahili": 2500, "Mixed": 2500, "Sheng": 2500})
+        by_group: dict[str, set[str]] = {}
+        for row in rows:
+            by_group.setdefault(row["group_id"], set()).add(row["language"])
+        self.assertEqual(len(by_group), 2500)
+        self.assertTrue(all(len(languages) == 4 for languages in by_group.values()))
+        synthetic = Path(__file__).parents[1] / "data" / "synthetic"
+        scored = {
+            row["text"].strip().lower()
+            for name in ("kenya_watch_synthetic_seed.csv", "kenya_watch_synthetic_colloquial.csv")
+            for row in csv.DictReader((synthetic / name).open(encoding="utf-8"))
+        }
+        self.assertFalse(scored & {row["text"].strip().lower() for row in rows})
+
+    def test_supplement_is_added_to_training_only_with_its_weight(self) -> None:
+        from ml.src import train as train_module
+
+        class Recorder:
+            def fit(self, texts, labels, **params):
+                self.texts, self.labels, self.params = texts, labels, params
+                return self
+
+        extra = [{"text": "kanjo alinidai thao", "label": "Bribery", "group_id": "g"}]
+        with patch.object(train_module, "supplement_rows", return_value=extra):
+            model = train_module._fit(Recorder(), ["main report"], ["Other"])
+        self.assertEqual(model.texts, ["main report", "kanjo alinidai thao"])
+        self.assertEqual(model.params["classifier__sample_weight"], [1.0, train_module.SUPPLEMENT_WEIGHT])
+        with patch.dict("os.environ", {"KW_SUPPLEMENT": "0"}):
+            self.assertEqual(train_module.supplement_rows(), [])
+
 
 
 if __name__ == "__main__":

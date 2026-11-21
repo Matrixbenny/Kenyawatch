@@ -64,6 +64,45 @@ def concepts_enabled() -> bool:
     return os.environ.get("KW_CONCEPTS", "1") != "0"
 
 
+# Training-only supplement: the 10,000-report register corpus
+# (ml/src/generate_register_dataset.py), the same fictional scenarios written in
+# English, Kiswahili, mixed English-Kiswahili and Sheng. It is added to the
+# training side of every fit (model selection, nested evaluation, calibration
+# folds and the final model) and never to a test fold, so every score is still
+# measured on the separately written reports. Its rows weigh 0.25 of a
+# hand-written row so that template text does not drown out the main corpus
+# (ml/src/experiments_registers.py compared 0.25 with 1.0).
+SUPPLEMENT_PATH = Path(__file__).resolve().parents[1] / "data" / "synthetic" / "kenya_watch_synthetic_registers.csv"
+SUPPLEMENT_WEIGHT = 0.25
+_supplement_cache: list[dict[str, str]] | None = None
+
+
+def supplement_enabled() -> bool:
+    """The register corpus is used unless KW_SUPPLEMENT=0 or the file is absent."""
+    return os.environ.get("KW_SUPPLEMENT", "1") != "0" and SUPPLEMENT_PATH.is_file()
+
+
+def supplement_rows() -> list[dict[str, str]]:
+    global _supplement_cache
+    if not supplement_enabled():
+        return []
+    if _supplement_cache is None:
+        rows, headers = read_rows(SUPPLEMENT_PATH)
+        validate_for_training(rows, headers)
+        _supplement_cache = rows
+    return _supplement_cache
+
+
+def _fit(model: Any, texts: list[str], labels: list[str]) -> Any:
+    """Fit on the given rows plus the training-only supplement, if enabled."""
+    extra = supplement_rows()
+    if not extra:
+        return model.fit(texts, labels)
+    weights = [1.0] * len(texts) + [SUPPLEMENT_WEIGHT] * len(extra)
+    return model.fit(list(texts) + [row["text"] for row in extra], list(labels) + [row["label"] for row in extra],
+                     classifier__sample_weight=weights)
+
+
 # Above this calibrated probability the suggestion is shown as a single
 # category; below it the reviewer sees the two most likely categories instead.
 CONFIDENT_AT = 0.6
@@ -155,8 +194,8 @@ def _cross_validate_candidate(
     predictions: list[str | None] = [None] * len(rows)
     for train_indices, test_indices in splitter.split(texts, labels, groups):
         _validate_split(labels, groups, train_indices, test_indices)
-        model = _build_model(model_name)
-        model.fit([texts[index] for index in train_indices], [labels[index] for index in train_indices])
+        model = _fit(_build_model(model_name), [texts[index] for index in train_indices],
+                     [labels[index] for index in train_indices])
         for index, prediction in zip(test_indices, model.predict([texts[index] for index in test_indices])):
             predictions[index] = str(prediction)
     if any(prediction is None for prediction in predictions):
@@ -203,8 +242,8 @@ def evaluate(rows: list[dict[str, str]]) -> dict[str, Any]:
         majority_label = Counter(labels[index] for index in train_indices).most_common(1)[0][0]
         for index in test_indices:
             majority_predictions[index] = majority_label
-        model = _build_model(selected_model)
-        model.fit([texts[index] for index in train_indices], [labels[index] for index in train_indices])
+        model = _fit(_build_model(selected_model), [texts[index] for index in train_indices],
+                     [labels[index] for index in train_indices])
         fold_predictions: list[str] = []
         for index, prediction in zip(test_indices, model.predict([texts[i] for i in test_indices])):
             predictions[index] = str(prediction)
@@ -228,6 +267,7 @@ def evaluate(rows: list[dict[str, str]]) -> dict[str, Any]:
         "validation": {
             "outer": "5-fold StratifiedGroupKFold; incident groups are disjoint",
             "model_selection": "3-fold stratified group validation inside each outer training fold",
+            "training_supplement": "register corpus added to every training fit only" if supplement_enabled() else None,
             "selection_metric": "macro F1",
             "candidate_models": list(MODEL_CANDIDATES),
         },
@@ -296,7 +336,7 @@ def calibrate(rows: list[dict[str, str]], model_name: str) -> dict[str, Any]:
     decisions = np.zeros((len(rows), len(CATEGORIES)))
     classes = None
     for train_idx, test_idx in StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=42).split(texts, labels, groups):
-        model = _build_model(model_name).fit([texts[i] for i in train_idx], labels[train_idx])
+        model = _fit(_build_model(model_name), [texts[i] for i in train_idx], list(labels[train_idx]))
         classes = model.classes_
         decisions[test_idx] = model.decision_function([texts[i] for i in test_idx])
     truth = np.searchsorted(classes, labels)
@@ -349,22 +389,35 @@ def train(
     }
     validate_for_training(rows, headers)
     if os.environ.get("KW_DEPLOY_BUILD") == "1":
-        # Deployment build: the nested evaluation only reports how good the model
-        # is and does not change it, so it is skipped to keep the image build
-        # short on small build machines. Model selection and calibration still run.
-        selected, scores = _select_model(rows, n_splits=5, random_state=42)
+        # Deployment build: the nested evaluation and model selection only report
+        # how good the model is; they do not change it. They are skipped to keep
+        # the image build short on small build machines, and the candidate that
+        # won selection in every outer fold of the full evaluation is used.
+        # Calibration still runs.
+        selected = os.environ.get("KW_DEPLOY_MODEL", "word_char_linear_svc")
+        if selected not in MODEL_CANDIDATES:
+            raise DatasetError(f"Unknown model candidate: {selected}")
         evaluation = {
             "deploy_build": True,
-            "note": "Nested evaluation skipped in the deployment build; run ml.src.train locally for the full evaluation.",
+            "note": "Nested evaluation and model selection skipped in the deployment build; "
+                    "run ml.src.train locally for the full evaluation.",
             "rows": len(rows),
-            "final_model_selection": {"candidate_macro_f1": scores, "selected_model": selected},
+            "final_model_selection": {"selected_model": selected},
         }
     else:
         evaluation = evaluate(rows)
     evaluation["data_status"] = data_status
     evaluation["real_world_performance_claim"] = False
-    final_model = _build_model(evaluation["final_model_selection"]["selected_model"])
-    final_model.fit([row["text"] for row in rows], [row["label"] for row in rows])
+    final_model = _fit(_build_model(evaluation["final_model_selection"]["selected_model"]),
+                       [row["text"] for row in rows], [row["label"] for row in rows])
+    extra = supplement_rows()
+    evaluation["training_supplement"] = {
+        "used": bool(extra),
+        "file": SUPPLEMENT_PATH.name if extra else None,
+        "rows": len(extra),
+        "weight": SUPPLEMENT_WEIGHT if extra else None,
+        "note": "Added to the training side of every fit only; all scores are measured on the main corpus.",
+    }
     evaluation["calibration"] = calibrate(rows, evaluation["final_model_selection"]["selected_model"])
     output_dir.mkdir(parents=True, exist_ok=True)
     model_path = output_dir / "category_model.joblib"
@@ -386,6 +439,7 @@ def train(
             **runtime_metadata,
             "categories": list(CATEGORIES),
             "training_rows": len(rows),
+            "training_supplement_rows": len(supplement_rows()),
             "training_group_count": len({row["group_id"] for row in rows}),
             "data_status": data_status,
             "real_world_performance_claim": False,
