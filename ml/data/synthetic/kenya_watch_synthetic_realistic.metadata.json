@@ -1,0 +1,33 @@
+{
+  "dataset_name": "Kenya Watch realistic report-form synthetic corpus",
+  "status": "synthetic_only_not_for_real_world_validation_or_production_training",
+  "generation_method": "Deterministic fictional narratives combining report-form fields, county/subcounty values, dates, roles, amounts and evidence cues",
+  "rows": 2160,
+  "scenario_groups": 540,
+  "incidents_per_category": 60,
+  "language_rows": {
+    "Sheng": 540,
+    "English": 540,
+    "Mixed": 540,
+    "Kiswahili": 540
+  },
+  "county_values_for_audit_only": [
+    "Nairobi",
+    "Mombasa",
+    "Kisumu",
+    "Nakuru",
+    "Eldoret",
+    "Machakos",
+    "Garissa",
+    "Kilifi",
+    "Bungoma",
+    "Meru"
+  ],
+  "limitations": [
+    "Every narrative is fictional and is not an observation of a real Kenyan report.",
+    "The mixed-language and Sheng versions were authored for pipeline testing and have not been reviewed by native-language reviewers.",
+    "The narratives imitate report-form structure but do not establish real-world prevalence or class balance.",
+    "Variants within a group describe one fictional incident and must stay in the same validation fold.",
+    "Scores on this corpus are not a real-world accuracy estimate."
+  ]
+}

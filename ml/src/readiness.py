@@ -34,6 +34,18 @@ def assess(evaluation: dict[str, Any], fit: dict[str, Any] | None) -> dict[str, 
     status = evaluation.get("data_status")
     checks.append(check("data are adjudicated real reports", status == REAL_STATUS, f"data_status = {status}"))
 
+    # An approval nobody can point to is not an approval. The evaluation must carry
+    # the ethics/review references recorded in ml/research_approvals.json, or the
+    # word "accurate" stays unusable however good the score is.
+    approval = evaluation.get("approval_reference")
+    granted = isinstance(approval, dict) and bool(approval) and all(
+        str(value or "").strip() for value in approval.values()
+    )
+    checks.append(check(
+        "research and data-protection approvals are recorded", granted,
+        f"approval_reference = {approval}" if approval else "no approval_reference on the evaluation",
+    ))
+
     rows = int(evaluation.get("rows", 0))
     checks.append(check("enough reports", rows >= MIN_ROWS, f"{rows} rows (need {MIN_ROWS})"))
 

@@ -1,0 +1,24 @@
+{
+  "dataset_name": "Kenya Watch synthetic combined corpus (seed + colloquial + realistic report-form)",
+  "status": "synthetic_only_not_for_real_world_validation_or_production_training",
+  "generation_method": "Concatenation of kenya_watch_synthetic_seed.csv, kenya_watch_synthetic_colloquial.csv and kenya_watch_synthetic_realistic.csv",
+  "rows": 2916,
+  "scenario_groups": 729,
+  "language_rows": {
+    "English": 918,
+    "Kiswahili": 810,
+    "Sheng": 648,
+    "Mixed": 540
+  },
+  "inputs": [
+    "kenya_watch_synthetic_seed.csv",
+    "kenya_watch_synthetic_colloquial.csv",
+    "kenya_watch_synthetic_realistic.csv"
+  ],
+  "limitations": [
+    "Synthetic text, not observations of real Kenyan reports.",
+    "The Sheng passages are written by the project author and are unverified until a Sheng speaker reviews them.",
+    "Variants within an incident group must stay in the same validation fold.",
+    "Scores are not a real-world accuracy estimate and do not satisfy ml/src/readiness.py."
+  ]
+}

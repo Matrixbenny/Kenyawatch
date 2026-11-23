@@ -9,7 +9,32 @@ const { normaliseForMatching } = require('../../backend/utils/kenyaLingo');
 const ML_ROOT = path.resolve(__dirname, '..');
 const APPROVAL_ROOT = path.resolve(ML_ROOT, 'data', 'approved');
 const RAW_ROOT = path.resolve(ML_ROOT, 'data', 'raw');
+const RESEARCH_APPROVALS = path.resolve(ML_ROOT, 'research_approvals.json');
 const MAX_REPORTS = 5000;
+
+// Reads the research/data-protection approvals recorded for this project. An entry
+// whose 'reference' is empty counts as NOT granted: an approval that cannot be
+// pointed to is not evidence of approval, and the readiness gate depends on this.
+function approvalRecord() {
+  try {
+    const registry = JSON.parse(fs.readFileSync(RESEARCH_APPROVALS, 'utf8'));
+    const approvals = (registry.approvals || []).map((entry) => ({
+      id: entry.id,
+      granted: Boolean(String(entry.reference || '').trim()),
+      grantedOn: entry.granted_on || null,
+      reference: String(entry.reference || '').trim() || null,
+    }));
+    const missing = approvals.filter((entry) => !entry.granted).map((entry) => entry.id);
+    return {
+      recorded: approvals,
+      allGranted: approvals.length > 0 && missing.length === 0,
+      missing,
+      sealedTestSetHeldBy: registry.sealed_test_set ? registry.sealed_test_set.held_by : null,
+    };
+  } catch (error) {
+    return { recorded: [], allGranted: false, missing: ['research_approvals.json unreadable'], sealedTestSetHeldBy: null };
+  }
+}
 
 function parseArguments(args) {
   const options = { writeRaw: false, confirmed: false };
@@ -190,7 +215,10 @@ async function run(options) {
         incidentGroupCount: summary.distinctIncidentGroups,
         finalizedCategoryCounts: summary.finalizedCategoryCounts,
         csvSha256,
-        note: 'Sensitive raw staging file. Review and de-identify manually; not approved for training.'
+        // The gate in ml/src/readiness.py will not call a model accurate unless the
+        // evaluation can point to the approval that let this data be used at all.
+        approvals: approvalRecord(),
+        note: 'Sensitive raw staging file. Review and de-identify manually; not approved for training until an approval_reference is recorded.',
       };
       const metadataPath = outputPath.replace(/\.csv$/, '.metadata.json');
       try {

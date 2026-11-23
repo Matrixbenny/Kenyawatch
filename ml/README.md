@@ -33,6 +33,8 @@ The exporter reads only report IDs listed in an explicit local allowlist and onl
 
 Before using the exporter, have the supervisor/institutional data-protection contact approve the intended research use and confirm each allowlisted report is eligible. The exporter cannot determine legal authority or reporter consent; the manifest is an operational allowlist, not a substitute for approvals.
 
+Record those approvals in [`research_approvals.json`](research_approvals.json) by filling in the `reference` of each entry (an ethics approval number, a DPO assessment reference). An entry with an empty `reference` counts as **not granted**, and the startup exporter copies this record into every export's `.metadata.json` under `approvals`. The readiness gate reads the resulting `approval_reference` on the evaluation, so a model trained on real reports cannot be described as accurate unless both references are present. The supervisor also holds the sealed test set named in that file; only reports in it may be used to report real-world performance, so the figure cannot be inflated by tuning on the same data.
+
 1. Create `ml/data/approved/report_ids.txt` locally, one Mongo report ObjectId per line. Use only reports cleared under the agreed research/data-handling process. Lines beginning with `#` are ignored. This file and its parent folder are Git-ignored.
 2. Set `ML_GROUP_HASH_KEY` in the local ignored `backend/.env` to a securely generated random secret of at least 32 characters. Do not reuse a password or commit/share the secret; keep it stable for repeatable group IDs.
 3. Run a summary-only dry run; this checks that all selected reports are active and have finalized reviewed category labels without writing narrative text:
@@ -69,23 +71,64 @@ node --test backend\tests\experimentalCategoryModel.test.js
 
 ## Synthetic pipeline demonstration
 
-`data/synthetic/kenya_watch_synthetic_seed.csv` is a deterministic, hand-authored corpus of 540 fictional examples: 15 scenario groups for each of the nine categories, with two English and two draft Kiswahili variants per group. Its adjacent metadata file records its provenance and limitations. Run the generator command above to recreate both files. These examples are not observations of Kenyan reports, and the Kiswahili has not been reviewed by a native speaker.
+`data/synthetic/kenya_watch_synthetic_seed.csv` is a deterministic, hand-authored seed corpus of 540 fictional examples: 15 scenario groups for each of the nine categories. `kenya_watch_synthetic_colloquial.csv` adds 216 examples, and `kenya_watch_synthetic_realistic.csv` adds 2,160 report-form-like examples across 540 incident groups. The combined benchmark therefore has 2,916 rows and 729 incident groups. These examples are not observations of Kenyan reports, and Kiswahili, mixed-language and Sheng passages have not been independently reviewed as real citizen language.
 
-The isolated benchmark was run with five-fold stratified group outer validation and three-fold grouped inner model selection; variants of each fictional incident remain together. It selected a word/character TF-IDF linear SVM and produced 0.8796 out-of-fold accuracy and 0.8784 macro F1 on this synthetic corpus. The English-only macro F1 was 0.9018 and draft-Kiswahili macro F1 was 0.8558. These scores only demonstrate how this pipeline behaves on its own designed examples. Templatic phrasing, simplified scenarios, and balanced classes can inflate scores; none of these numbers estimate accuracy on real Kenyan reports or establish fitness for use. The live reviewer queue can show the trained model's category as an explicitly experimental suggestion after the reviewer has committed their own category assessment. It does not show a probability or score, overwrite any label, change urgency, or trigger workflow actions. Runtime and metadata artifacts are written locally under ignored `ml/artifacts/`; the app reports an error if its runtime artifact is missing or invalid.
+The combined benchmark uses five-fold stratified group outer validation and three-fold grouped inner model selection; variants of each fictional incident remain together. The notebook run produced 0.9571 accuracy and macro-F1. A separate runtime run added 10,000 register rows only to the training side at weight 0.25 and produced 0.9705 nested out-of-fold accuracy and macro-F1, with a 0.9706 outer-fold mean and 0.0080 standard deviation. These scores demonstrate pipeline and corpus behaviour only. Templatic phrasing, simplified scenarios and balanced classes can inflate them; neither number estimates accuracy on real Kenyan reports or establishes fitness for use. The live reviewer queue shows the model only as an explicit experimental suggestion after the reviewer has committed an independent assessment. It does not show a probability or score, overwrite any label, change urgency or trigger workflow actions. Runtime and metadata artifacts are written locally under ignored `ml/artifacts/`; the app reports an error if an artifact is missing or invalid.
 
 ### How much of that score is the corpus?
 
-`data/synthetic/kenya_watch_synthetic_colloquial.csv` is a second, hand-authored corpus (216 rows, 54 incidents) written in the registers the seed lacks: short first-person accounts, SMS-style spelling, Sheng and code-switching, second-hand reports and question forms. Generate it with `python -m ml.src.generate_colloquial_dataset`, then combine the two files and retrain.
+`data/synthetic/kenya_watch_synthetic_colloquial.csv` is a hand-authored corpus (216 rows, 54 incidents) written in registers the seed lacks: short first-person accounts, SMS-style spelling, Sheng and code-switching, second-hand reports and question forms. `data/synthetic/kenya_watch_synthetic_realistic.csv` adds 2,160 report-form-like rows: 60 incidents per category in English, Kiswahili, mixed and Sheng variants.
 
-On the seed corpus alone the pipeline scores **0.8784** macro F1. On the combined 756 rows it scores **0.8346**. The model was unchanged and the shuffled-label control still fell to chance, so the lower figure is not a code regression: it is the same model meeting text it was not trained to expect. Roughly four points of the original score came from the formal register of the seed text. Treat 0.878 as an upper bound and 0.835 as the more defensible synthetic figure. Neither is a real-world estimate, and multiplying synthetic rows of one register will raise the number while teaching the model nothing.
+Generate all corpora and combine them with:
+
+```powershell
+python -m ml.src.generate_synthetic_dataset
+python -m ml.src.generate_colloquial_dataset
+python -m ml.src.generate_realistic_synthetic_dataset
+python -m ml.src.build_combined_corpus
+python -m ml.src.train ml\data\synthetic\kenya_watch_synthetic_combined.csv
+```
+
+The seed-only result was 0.8784 macro-F1, and the older seed-plus-colloquial result was 0.8346. The expanded combined result is 0.9571 in the notebook run and 0.9705 in the register-supplemented runtime run. These are different experiments and must not be combined or presented as a real-world accuracy progression.
 
 ### The register corpus: training only, never scored
 
 `data/synthetic/kenya_watch_synthetic_registers.csv` (`python -m ml.src.generate_register_dataset`) holds 10,000 fictional reports: 2,500 scenarios from everyday Kenyan settings (roadblocks, county askari, the lands registry, Huduma Centres, county hospitals, bursary and CDF money, tenders, county jobs), each written in plain English, plain Kiswahili, mixed English–Kiswahili and Sheng. The four versions of a scenario describe the same incident and share a `group_id`.
 
-Because it comes from templates, its own cross-validation score would say little, so `ml.src.train` adds it to the training side of every fit (model selection, nested evaluation, calibration folds and the final model) at weight 0.25 and never to a test fold. Every score is still measured on the 756 hand-written rows. Set `KW_SUPPLEMENT=0` to train without it.
+Because it comes from templates, its own cross-validation score would say little, so `ml.src.train` adds it to the training side of every fit (model selection, nested evaluation, calibration folds and the final model) at weight 0.25 and never to a test fold. Every score in the combined experiment is still measured on the 2,916-row main corpus. Set `KW_SUPPLEMENT=0` to train without it.
 
 `python -m ml.src.experiments_registers` measures the effect on text the corpus was not generated from. Nested macro F1 on the 756 rows rose from 0.877 to 0.898 (Sheng rows 0.773 to 0.869). Trained on the formal seed and tested on the colloquial corpus, the score rose from 0.680 to 0.806: 34 reports corrected and 8 broken, McNemar p < 0.001. The colloquial corpus and the register corpus were both written for this project, so part of that gain may be shared phrasing; only adjudicated real reports can confirm it.
+
+The most informative number in that experiment is the one that did not move. Run the original model over the register corpus and it scores only **0.694**, with Sheng lowest at 0.664. That is a model which looks good on text written the way it was trained and falls by roughly twenty points the moment it meets a different register. The supplement closes part of that gap; it does not close all of it, and neither corpus was written by a citizen describing a real incident.
+
+### How close is the live database to real-data training?
+
+Before any export, `node ml/scripts/label-progress.js` reports how many reports the exporter would actually accept today, and why the rest do not count. It reads only the `categoryReview` block and the archive flag, never the narrative, and it reuses the exporter's own eligibility rule, so it cannot disagree with the export or with the gate.
+
+```powershell
+node ml\scripts\label-progress.js          # readable summary with progress bars
+node ml\scripts\label-progress.js --json   # machine-readable, for recording in the log
+```
+
+It separates reports that are eligible from those waiting on a second reviewer, waiting on an Admin adjudication, judged insufficient, not yet reviewed, and eligible but archived (which the exporter ignores). Point it at whichever database you mean with `MONGO_URI`.
+
+A wider candidate concept vocabulary was also tried and rejected (`KW_CONCEPTS_FILE`), because it did not improve the held-out score. The honest summary is that corpus variety helped and vocabulary inflation did not.
+
+### Native-speaker Sheng review
+
+Everything in the two corpora was written by the project author, so the Sheng is unverified. `ml/lingo/build_sheng_review_sheet.py` writes `ml/data/lingo/sheng_native_review.csv`: a deterministic, category-balanced sample of Sheng sentences with empty columns for a Sheng speaker to judge. The reviewer sets `verdict` to `keep`, `rewrite` or `drop`, rewrites the sentence in `corrected_text` where needed, and answers `is_it_natural_sheng` with yes or no.
+
+```powershell
+.\.venv\Scripts\python.exe -m ml.lingo.build_sheng_review_sheet
+# ...give the CSV to the Sheng reviewer, then...
+.\.venv\Scripts\python.exe -m ml.lingo.apply_sheng_review --reviewer "Name" --reviewed-on 2026-11-22
+```
+
+`apply_sheng_review.py` refuses an incomplete sheet rather than guessing: every row needs a valid verdict, a rewrite needs replacement text, and the naturalness answer is mandatory. It then writes `kenya_watch_synthetic_sheng_verified.csv` (leaving the originals untouched) and an attestation file naming the reviewer, the date and the keep/rewrite/drop counts. The other Sheng rows are carried through marked `unreviewed`, so no claim is silently made about text nobody checked.
+
+The step verifies *language*, not *labels*: a reviewer saying a sentence is natural Sheng does not confirm that it exemplifies the alleged category. Treat the output as a better-written copy of the same synthetic data, not as ground truth.
+
+One honest caveat about the parallel-text Sheng source. It was learned with IBM Model 1 from a parallel corpus whose English side is a Bible translation, so the 1,288 stored word pairs are dominated by narrative verbs (`went`, `fell`, `came`, `called`, `replied`) and include scripture vocabulary (`dhambi` sin, `kanisa` church, `imani` faith). Only about eleven entries fall in the corruption domain (`kanjo` council, `jela` jail, `pesa`/`ganji`/`munde` money, `thao` thousand, `machief` chief). The list is a reasonable source of ordinary Sheng words and a poor source of corruption vocabulary, so it must not be presented as a corruption glossary; the corruption glossary in `backend/utils/kenyaLingo.js` remains the place where corruption terms are mapped. Two of the learned pairs are also plainly wrong (`finje` glossed as "groups" rather than fifty, `kuwaseti` as "apostles"), which is why nothing from this list reaches the classifier without review.
 
 The synthetic-trained suggestion is connected to the local live application for demonstration only. It is not ready for deployment or real reports: synthetic results cannot establish operational usefulness, fairness, or safety. Before using a trained classifier in real casework, replace this demonstration with independently reviewed, lawfully approved and de-identified reports, and evaluate against a separately frozen incident-separated test set. Reviewers should validate every label, including ambiguous category boundaries; Kiswahili and other language coverage needs competent human review. Also require pre-agreed per-category acceptance criteria, subgroup error review, model/version provenance, a rollback path, and ongoing monitoring. Never treat an advisory output as a finding or automated decision.
 
@@ -100,10 +143,10 @@ The model comparisons are a small, pre-declared benchmark, not a broad hyperpara
 Two commands answer those questions with numbers instead of opinions:
 
 ```powershell
-.\.venv\Scripts\python.exe -m ml.src.diagnose_fit ml\data\synthetic\kenya_watch_synthetic_seed.csv
+.\.venv\Scripts\python.exe -m ml.src.diagnose_fit ml\data\synthetic\kenya_watch_synthetic_combined.csv
 .\.venv\Scripts\python.exe -m ml.src.readiness
 ```
 
-`diagnose_fit` compares training and validation scores with incident groups kept apart, draws a learning curve, runs a shuffled-label control (must fall to chance) and sweeps the regularisation strength. Result on the synthetic seed: training macro-F1 1.00 against validation 0.875, a gap of 0.12. That is **mild overfitting caused by too little data**: only 135 independent scenarios stand behind 540 rows, the learning curve is still rising at full size, and a stronger penalty does not close the gap. The shuffled-label control scores 0.09 (chance 0.11), so there is no leakage. More independent incidents are the cure; tuning is not.
+`diagnose_fit` compares training and validation scores with incident groups kept apart, draws a learning curve, runs a shuffled-label control (must fall to chance) and sweeps the regularisation strength. On the expanded combined synthetic corpus the diagnosis gave training macro-F1 1.00 and validation 0.965, a gap of 0.035. It found no over/under-fitting or leakage signal at the configured thresholds. The learning curve still rose at full size, so more independent incidents would remain useful. This diagnosis does not make the score real-world accurate.
 
 `readiness` is the gate for the word "accurate". It passes only for data marked `adjudicated_real_reports` (the metadata JSON must also carry an `approval_reference`) with at least 450 reports, 30 per category, a held-out score whose lower bound is at least 0.70, no category with recall below 0.50, English and Kiswahili within 0.10 of each other, and a clean fit diagnosis. On synthetic data it fails by design, so the model stays labelled an experimental reviewer aid. To pass it: collect adjudicated reports through the blinded review workflow, export them with `ml/scripts/export-reviewed-dataset.js`, then train, diagnose and run the gate again.

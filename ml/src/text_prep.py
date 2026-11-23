@@ -245,6 +245,12 @@ def prepare_batch(texts, morphology: bool = True, concepts: bool = True) -> list
     return [prepare_model_text(text, morphology, concepts) for text in texts]
 
 
+# Shared across every TextPrep instance and every cross-validation fold. Keyed on
+# the preparation parameters plus the text, so identical inputs reuse the same output
+# and different parameters never collide. Bounded so a long session cannot grow it
+# without limit.
+_PREPARED: dict = {}
+_MAX_PREPARED_ENTRIES = 200_000
 class TextPrep:
     """Scikit-learn step for text preparation. When the Sheng lexicon is on, it
     records the words seen in training and translates only words outside them,
@@ -265,12 +271,37 @@ class TextPrep:
 
     def fit(self, X, y=None):
         self.known_words_ = known_words(X) if self.lexicon else []
+        # Preparation is deterministic: same text in, same text out, and the only
+        # fitted state is the known-word set used to skip already-known words. The
+        # cache is therefore safe. It matters because nested cross-validation fits
+        # this step from scratch about forty times and many of those folds prepare
+        # the same sentences; preparation is the most expensive part of a fit
+        # (about 24s of 49s for the combined corpus). The key includes every fitted
+        # parameter plus the text, so a fold with different parameters can never
+        # read another fold's output.
+        self._cache_key = (
+            bool(self.morphology), bool(self.concepts), bool(self.lexicon),
+            hash(frozenset(self.known_words_)),
+        )
         return self
 
     def transform(self, X):
         lexicon = load_lexicon() if self.lexicon else None
         known = frozenset(self.known_words_) if self.lexicon else None
-        return [prepare_model_text(text, self.morphology, self.concepts, lexicon, known) for text in X]
+        key = getattr(self, "_cache_key", None)
+        if key is None:
+            key = (bool(self.morphology), bool(self.concepts), bool(self.lexicon), None)
+        bucket = _PREPARED.setdefault(key, {})
+        if len(bucket) > _MAX_PREPARED_ENTRIES:
+            bucket.clear()
+        output = []
+        for text in X:
+            cached = bucket.get(text)
+            if cached is None:
+                cached = prepare_model_text(text, self.morphology, self.concepts, lexicon, known)
+                bucket[text] = cached
+            output.append(cached)
+        return output
 
     def fit_transform(self, X, y=None):
         return self.fit(X, y).transform(X)

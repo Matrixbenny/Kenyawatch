@@ -10,6 +10,12 @@ def evaluation(**overrides):
     base = {
         "data_status": REAL_STATUS,
         "rows": 600,
+        # An approval nobody can point to is not an approval, so real data only counts
+        # as usable once the ethics and data-protection references are recorded.
+        "approval_reference": {
+            "institutional-ethics": "SU-ETH/2026/117",
+            "data-protection": "DPO-2026-11-21",
+        },
         "category_counts": {name: 60 for name in "ABCDEFGHI"},
         "outer_fold_macro_f1_mean": 0.85,
         "outer_fold_macro_f1_std": 0.03,
@@ -29,6 +35,16 @@ class ReadinessGateTests(unittest.TestCase):
 
     def test_real_data_with_every_check_met_passes(self):
         self.assertTrue(assess(evaluation(), GOOD_FIT)["ready_to_claim_real_world_accuracy"])
+
+    def test_real_data_without_recorded_approval_is_refused(self):
+        # The score may be perfect; if nobody can point to the ethics approval, the
+        # word "accurate" stays unusable.
+        for missing in ({}, None, {"institutional-ethics": ""}, {"institutional-ethics": "X", "data-protection": "  "}):
+            case = evaluation(approval_reference=missing)
+            result = assess(case, GOOD_FIT)
+            self.assertFalse(result["ready_to_claim_real_world_accuracy"], missing)
+            names = [check["check"] for check in result["checks"]]
+            self.assertIn("research and data-protection approvals are recorded", names)
 
     def test_each_failure_blocks_readiness(self):
         failing = [

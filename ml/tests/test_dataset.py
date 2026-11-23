@@ -18,10 +18,50 @@ from ml.src.generate_synthetic_dataset import (
     OUTPUT_METADATA,
     rows_for_dataset,
 )
+from ml.src.generate_realistic_synthetic_dataset import (
+    OUT_CSV,
+    OUT_METADATA,
+    rows_for_dataset as realistic_rows,
+)
 from ml.src.train import MODEL_CANDIDATES, train
 
 
 class DatasetAuditTests(unittest.TestCase):
+    def test_realistic_synthetic_corpus_is_deterministic_balanced_and_grouped(self) -> None:
+        rows = realistic_rows()
+        self.assertEqual(rows, realistic_rows())
+        self.assertEqual(len(rows), 2160)
+        self.assertEqual(Counter(row["label"] for row in rows), {category: 240 for category in CATEGORIES})
+        self.assertEqual(Counter(row["language"] for row in rows), {
+            "English": 540,
+            "Kiswahili": 540,
+            "Mixed": 540,
+            "Sheng": 540,
+        })
+        groups_by_category = {
+            category: {row["group_id"] for row in rows if row["label"] == category}
+            for category in CATEGORIES
+        }
+        self.assertTrue(all(len(groups) == 60 for groups in groups_by_category.values()))
+        for category, group_ids in groups_by_category.items():
+            for group_id in group_ids:
+                group_rows = [row for row in rows if row["group_id"] == group_id]
+                self.assertEqual(len(group_rows), 4, category)
+                self.assertEqual(Counter(row["language"] for row in group_rows), {
+                    "English": 1,
+                    "Kiswahili": 1,
+                    "Mixed": 1,
+                    "Sheng": 1,
+                })
+        self.assertEqual(len({row["text"].strip().casefold() for row in rows}), len(rows))
+
+        with OUT_CSV.open(encoding="utf-8", newline="") as source:
+            generated_csv = list(csv.DictReader(source))
+        metadata = json.loads(OUT_METADATA.read_text(encoding="utf-8"))
+        self.assertEqual(generated_csv, rows)
+        self.assertEqual(metadata["status"], "synthetic_only_not_for_real_world_validation_or_production_training")
+        self.assertIn("not a real-world accuracy estimate", " ".join(metadata["limitations"]))
+
     def test_synthetic_corpus_is_deterministic_balanced_and_grouped(self) -> None:
         rows = rows_for_dataset()
         self.assertEqual(rows, rows_for_dataset())

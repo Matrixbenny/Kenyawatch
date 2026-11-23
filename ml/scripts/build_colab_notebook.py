@@ -1,7 +1,6 @@
 """Builds Kenya_Watch_ML_Colab.ipynb - a self-contained Colab notebook that mirrors
-the offline pipeline in ml/src/ and is organised around the supervisor's ML rubric:
-1. Introduction/Problem  2. Dataset & Preprocessing  3. Methodology & Model Selection
-4. Model Evaluation      5. Deployment.
+the offline pipeline in ml/src/ and follows five practical sections: problem, dataset,
+methodology, evaluation and deployment.
 
 Run: python ml/scripts/build_colab_notebook.py   (from the project root)
 The notebook embeds the repository's synthetic corpus so it runs with no uploads.
@@ -13,10 +12,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "ml" / "Kenya_Watch_ML_Colab.ipynb"
-CSV = ROOT / "ml" / "data" / "synthetic" / "kenya_watch_synthetic_seed.csv"
+CSV = ROOT / "ml" / "data" / "synthetic" / "kenya_watch_synthetic_combined.csv"
 
 # Embed the corpus as an inline CSV string so Colab needs no file upload. This keeps the
-# notebook completely reproducible: the same 540 rows the repository generator produces.
+# notebook completely reproducible: the same combined rows the repository generators produce.
 rows = list(csv.reader(CSV.open(encoding="utf-8-sig", newline="")))
 header, body = rows[0], rows[1:]
 # Re-quote with csv.writer so narratives containing commas/newlines survive embedding.
@@ -52,16 +51,13 @@ Corruption Cases in Kenya
 ## Purpose
 
 This notebook reproduces the offline ML pipeline in the project repository (`ml/src/`) so the
-complete workflow can be inspected and re-run in one place. It is organised to map directly onto
-the assessment rubric:
+complete workflow can be inspected and re-run in one place. It is organised into:
 
-| Rubric component | Section |
-|---|---|
-| Introduction & Problem Definition | **1** |
-| Dataset & Preprocessing (description, EDA, feature engineering) | **2** |
-| Methodology & Model Selection (choice, justification, implementation) | **3** |
-| Model Evaluation (metrics, comparison, visualisation) | **4** |
-| Deployment (integration strategy + demonstration) | **5** |
+1. Introduction and problem definition
+2. Dataset and preprocessing
+3. Methodology and model selection
+4. Model evaluation
+5. Deployment and honest limitations
 
 **To run:** `Runtime ▸ Run all`. No uploads or setup required.
 
@@ -73,9 +69,11 @@ Therefore:
 
 - The scores in Section 4 measure performance **on the synthetic corpus only**.
 - They are **not** an estimate of accuracy on real Kenyan corruption reports.
-- The model produced here is **not** wired into the live web application. The live app uses a
-  transparent keyword classifier (`backend/utils/classifier.js`) as assistive triage only
-  (design decisions #5/#28: ML assists, it never blocks the workflow).
+- The model produced here is exported to a fingerprinted JSON runtime artifact and is connected
+  to the live reviewer workflow as an **experimental suggestion**. It is shown only after a
+  reviewer records an independent category assessment. The live app still uses transparent
+  keyword rules for submission-time category and urgency triage; the model never blocks the
+  workflow or makes a decision.
 - Using real reports requires the data-governance process documented in `ml/README.md`.
 """)
 
@@ -83,7 +81,6 @@ Therefore:
 md("""
 ---
 # 1. Introduction and Problem Definition
-*(Rubric: 2 marks clarity of problem definition · 3 marks relevance and motivation)*
 
 ## 1.1 The problem
 
@@ -106,12 +103,14 @@ A human review team cannot read and prioritise every narrative quickly. The plat
 uses lightweight text classification to **assist** triage:
 
 - **Suggest a category** for each report (8 statutory categories + `Other`).
-- **Signal urgency** so High/Critical cases escalate if unclaimed past a threshold.
+- **Suggest a category** to the reviewer. Urgency remains the separate, transparent keyword
+  triage used by the live application.
 
-**The ML layer is assistive, never decision-making:** it runs asynchronously after submission so it
-can never block a report; it never sees or uses reporter identity (which is not collected for
-anonymous reports); and category labels used for training come from a **double-blind human review**
-workflow, not from the reporter's own selection.
+**The ML layer is assistive, never decision-making:** keyword triage runs asynchronously after
+submission so it can never block a report, while the experimental model suggestion is requested
+only after a reviewer records an independent assessment. The model never sees reporter identity
+(which is not collected for anonymous reports), and category labels used for training come from a
+**double-blind human review** workflow, not from the reporter's own selection.
 
 ## 1.3 Why this matters
 
@@ -125,15 +124,13 @@ accountable** rather than a black box.
 md("""
 ---
 # 2. Dataset and Preprocessing
-*(Rubric: 3 marks dataset description · 4 marks preprocessing/feature engineering · 2 marks EDA)*
-
 ## 2.1 Dataset description
 
 | Property | Value |
 |---|---|
-| Source | Deterministic, hand-authored **synthetic** corpus (`ml/src/generate_synthetic_dataset.py`) |
-| Size | **540 rows** = 9 categories × 15 scenario groups × 4 variants |
-| Variants per scenario | 2 English + 2 draft Kiswahili |
+| Source | Combined deterministic **synthetic** seed, colloquial and realistic report-form corpora |
+| Size | **2,916 rows** across **729 incident groups** |
+| Registers | English, Kiswahili, mixed English–Kiswahili and Sheng |
 | Labels | The 8 statutory categories (Anti-Corruption and Economic Crimes Act) + `Other` |
 | Incident grouping | Each fictional incident = one `group_id`; all variants of one incident stay in the same fold |
 | Real personal data | **None** |
@@ -151,8 +148,8 @@ validation, metric computation — before any sensitive data is touched.
 
 ## 2.2 The corpus is embedded below
 
-So that this notebook runs anywhere with **no file uploads**, the 540-row corpus is embedded as a
-CSV string. It is byte-identical to `ml/data/synthetic/kenya_watch_synthetic_seed.csv` in the
+So that this notebook runs anywhere with **no file uploads**, the 2,916-row combined corpus is embedded as a
+CSV string. It is byte-identical to `ml/data/synthetic/kenya_watch_synthetic_combined.csv` in the
 repository.
 """)
 
@@ -195,7 +192,6 @@ print(f"Duplicate texts    : {{duplicates}}")
 md("""
 ## 2.3 Exploratory Data Analysis
 
-*(Rubric: 2 marks — key insights, supported by visuals/statistics)*
 """)
 
 code("""
@@ -293,8 +289,6 @@ from the held-out fold leaks into the features.
 md("""
 ---
 # 3. Methodology and Model Selection
-*(Rubric: 4 marks model selection & justification · 3 marks technical implementation)*
-
 ## 3.1 Model candidates and justification
 
 Two **pre-declared** candidates are compared — not an open-ended hyperparameter search. On a
@@ -304,7 +298,7 @@ synthetic corpus an exhaustive search would inflate results without adding evide
 |---|---|---|
 | **Word TF-IDF (1–2) + Logistic Regression** (`balanced`) | Strong, interpretable text baseline; coefficient signs show which words drive a label | Ignores morphology; brittle to misspelling |
 | **Word + char TF-IDF → Linear SVM** (`balanced`) | Character n-grams absorb spelling and Kiswahili agglutination; linear SVM handles very high-dimensional sparse input efficiently | Decision scores are less interpretable than probabilities |
-| *(considered, rejected)* fine-tuned transformer (e.g. mBERT) | Potentially strongest on real multilingual text | No real labelled data to fine-tune on; 540 synthetic rows would demonstrate only over-fitting; too heavy for the deployment target |
+| *(considered, rejected)* fine-tuned transformer (e.g. mBERT) | Potentially strongest on real multilingual text | No real adjudicated labelled data to fine-tune on; synthetic expansion would demonstrate pipeline behaviour, not real fit; too heavy for the deployment target |
 
 **Why linear models on TF-IDF are the right choice here:** the input is short, domain-specific
 narrative text; the corpus is small; interpretability matters for a governance-sensitive platform;
@@ -481,8 +475,6 @@ print(folds_df.to_string(index=False))
 md("""
 ---
 # 4. Model Evaluation
-*(Rubric: 4 marks metrics & interpretation · 2 marks comparative analysis · 2 marks visualisation)*
-
 ## 4.1 Metrics and why each is used
 
 | Metric | What it means | Why it is here |
@@ -618,8 +610,9 @@ Stated plainly, because this matters more than any score:
    detect drift as language and reporting patterns change.
 3. **No native-speaker validation** of Kiswahili, and no code-switching (English/Swahili mixed within
    one narrative), which is very common in real reports.
-4. **No probability calibration.** If a confidence threshold is used operationally, calibration must
-   be measured separately.
+4. **Synthetic-only calibration.** The runtime artifact stores a temperature fitted on grouped
+   out-of-fold scores and the live UI shows only a high/low cue; this does not establish
+   real-world confidence.
 5. **Fairness is unexplored** beyond a language split; proper evaluation needs stakeholder-defined
    acceptable error rates per category.
 
@@ -632,8 +625,6 @@ Stated plainly, because this matters more than any score:
 md("""
 ---
 # 5. Deployment
-*(Rubric: 2 marks deployment strategy · 6 marks demonstration)*
-
 ## 5.1 Where this sits in the live system
 
 ```
@@ -646,17 +637,18 @@ Citizen submits ──► POST /api/reports ──► report saved ──► res
                              ┌──────────────────────────┴─────────────────────────┐
                              │                                                    │
               backend/utils/classifier.js  (LIVE TODAY)          ml/artifacts/category_model.joblib
-              weighted keyword triage → category + urgency        (OFFLINE — not wired in)
+              weighted keyword triage → category + urgency        experimental model suggestion
+                                                                  (reviewer-only, after assessment)
 ```
 
-**The live app deliberately uses the transparent keyword classifier, not this notebook's model.**
-Three reasons:
+**The live app uses both layers for different purposes.** Three safeguards apply:
 
-1. **No approved real training data yet.** Wiring a synthetic-trained model into a live reporting
-   platform would be indefensible.
-2. **Auditability.** A reviewer can see exactly which words triggered a triage suggestion. An opaque
-   suggestion on someone's corruption report is a governance problem.
-3. **Robustness.** The keyword layer cannot fail in a way that blocks submission (decision #28).
+1. **Independent judgement first.** A reviewer must record their own category assessment before the
+   experimental model suggestion is returned.
+2. **Synthetic-data warning.** The suggestion is labelled experimental and is never presented as a
+   probability, finding or automated decision.
+3. **Robustness.** If the runtime artifact is missing or invalid, reporting and review continue
+   normally because keyword triage remains available.
 
 ## 5.2 Rollout plan (governance-gated)
 
@@ -670,17 +662,17 @@ Three reasons:
 | 6 | **Shadow mode** — model predicts silently, compared with human decisions | Future |
 | 7 | **Assist-only** deployment with a confidence floor | Future |
 
-## 5.3 Serving options when approved
+## 5.3 Serving method used
 
-The artifact is a `joblib`-serialised scikit-learn `Pipeline`, so integration is straightforward and
-already isolated behind one function (`classifyInBackground` in `backend/routes/report.routes.js`):
+The offline training pipeline exports a compact JSON runtime artifact rather than shipping Python or
+joblib to production. `ml/src/runtime_export.py` writes the TF-IDF vocabularies, inverse document
+frequencies, classifier weights, preprocessing rules and calibration metadata. The Node.js API
+loads and validates that artifact in `backend/utils/experimentalCategoryModel.js`, reproduces the
+same vector arithmetic in JavaScript and exposes the suggestion through
+`GET /api/reports/:id/ml-category-suggestion` only after the reviewer's independent assessment.
 
-- **(a) Python sidecar** — a small FastAPI/Flask service exposing `POST /classify`, called by Express.
-- **(b) Export to ONNX** — run natively from Node without a Python runtime.
-- **(c) Batch pre-computation** — classify on a queue worker; no request-path dependency at all.
-
-Option (c) is the lowest-risk first step because it keeps the public submission path completely
-independent of the model.
+This keeps the public submission path independent of the model: keyword triage remains available,
+and reporting and review continue if the optional artifact is missing or invalid.
 
 ## 5.4 Demonstration (in-notebook)
 
@@ -770,25 +762,22 @@ joblib.dump(final_model, artifact_dir / "category_model.joblib")
     "training_group_count": len(set(GROUPS)),
     "data_status": "synthetic_only_not_for_real_world_validation_or_production_training",
     "real_world_performance_claim": False,
-    "note": "Synthetic-only pipeline demonstration; not valid for real-world validation or production.",
+    "note": "Synthetic-only notebook demonstration; the production runtime uses the JSON export from ml/src/train.py.",
 }, indent=2), encoding="utf-8")
 
 print("Artifact written to:", artifact_dir.resolve())
 print("Files:", sorted(p.name for p in artifact_dir.glob("*.joblib")))
-print("NOTE: this artifact is NOT connected to the live application.")
+print("NOTE: this synthetic-only artifact is experimental and not validated for real reports.")
 """)
 
 md("""
 ---
 # Summary
 
-| Rubric area | Delivered in this notebook |
-|---|---|
-| **Introduction & problem** (5) | Corruption reporting fails on fear, feedback and triage; ML assists triage only, and never sees reporter identity |
-| **Dataset & preprocessing** (9) | 540-row, 9-category, incident-grouped synthetic corpus; audit gates; 4-panel EDA with five insights; learned in-pipeline TF-IDF features |
-| **Methodology** (7) | Two pre-declared candidates with justification; nested 5×3 StratifiedGroupKFold; fixed hyperparameters with rationale; leakage assertions |
-| **Evaluation** (8) | Accuracy, balanced accuracy, macro F1, per-category P/R/F1, confusion matrix, majority baseline comparison, candidate comparison, language subgroups, explicit limitations |
-| **Deployment** (8) | Three-way integration strategy with an isolated hook point, governance-gated rollout plan, in-notebook demonstration of unseen predictions |
+The notebook covers the problem and why ML is assistive; a 2,916-row, 9-category,
+incident-grouped synthetic dataset; two pre-declared candidates with nested grouped validation;
+accuracy, macro-F1, per-category metrics and visualisations; and a fingerprinted runtime export
+with reviewer-only gating and governance limits.
 
 ### Final honest statement
 

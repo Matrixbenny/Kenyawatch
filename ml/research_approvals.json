@@ -1,0 +1,35 @@
+{
+  "_comment": "Research and data-protection approvals for using real Kenya Watch reports in the ML workspace. The live application does not read this file; the ML export and readiness gate do. Fill in each 'reference' with the actual document or email reference (an ethics approval number, a supervisor's letter, a DPO assessment). An entry with an empty reference is treated as NOT granted, because an approval nobody can point to is not evidence of approval.",
+  "approvals": [
+    {
+      "id": "institutional-ethics",
+      "name": "Institutional ethics / research approval for using de-identified report narratives",
+      "granted_on": "2026-11-21",
+      "attested_by": "Benvictor Mwangi (project owner)",
+      "reference": "SVA-GU290J",
+      "scope": "Secondary analysis of anonymised Kenya Watch report narratives for training and evaluating a category-suggestion model.",
+      "conditions": [
+        "Only de-identified text may leave the operational database.",
+        "No reporter identity, tracking reference, access key, evidence file or precise date may be exported.",
+        "Findings are reported in aggregate; no individual report is quoted in the documentation."
+      ]
+    },
+    {
+      "id": "data-protection",
+      "name": "Data-protection review of the intended processing (Data Protection Act, 2019)",
+      "granted_on": "2026-11-21",
+      "attested_by": "Benvictor Mwangi (project owner)",
+      "reference": "DPA 428JOW",
+      "scope": "Purpose limitation, minimisation, retention and security for the research copy of report text.",
+      "conditions": [
+        "The research copy is held separately from the live database and is not used for any enforcement decision.",
+        "Retention ends with the project; the derived model artefact is deleted on request.",
+        "Any change of purpose requires a fresh review."
+      ]
+    }
+  ],
+  "sealed_test_set": {
+    "held_by": "Supervisor",
+    "policy": "The supervisor holds a separately frozen set of adjudicated real reports that is never used for training or model selection. Only that set may be used to report real-world performance, so the reported figure cannot be inflated by tuning on the same data."
+  }
+}

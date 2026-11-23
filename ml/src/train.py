@@ -464,6 +464,7 @@ def main() -> int:
         validate_for_training(rows, headers)
         metadata_path = input_path.with_suffix(".metadata.json")
         data_status = "unverified_local_dataset"
+        approval_reference = None
         if metadata_path.is_file():
             metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
             if metadata.get("status") == "synthetic_only_not_for_real_world_validation_or_production_training":
@@ -471,11 +472,20 @@ def main() -> int:
             elif metadata.get("status") == "adjudicated_real_reports" and metadata.get("approval_reference"):
                 # Real, double-labelled reports exported under a recorded approval (see README).
                 data_status = metadata["status"]
+                approval_reference = metadata["approval_reference"]
         evaluation = train(
             rows,
             Path(__file__).resolve().parents[1] / "artifacts",
             data_status=data_status,
         )
+        # Carried into the evaluation so the readiness gate can see it. Without it the
+        # gate refuses to call a model accurate on real reports, whatever its score.
+        if approval_reference:
+            evaluation["approval_reference"] = approval_reference
+            artifacts = Path(__file__).resolve().parents[1] / "artifacts"
+            (artifacts / "evaluation.json").write_text(
+                json.dumps(evaluation, indent=2, ensure_ascii=True) + "\n", encoding="utf-8"
+            )
         print(json.dumps(evaluation, indent=2, ensure_ascii=True))
         print("Experimental artifacts saved locally. The runtime model is available to reviewer suggestions only.")
         return 0
